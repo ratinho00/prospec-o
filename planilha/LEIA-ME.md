@@ -8,6 +8,10 @@ Você **não precisa** de chave do Google nem de cartão. Escolha uma das três 
 | **Importar lista pronta** (Apify, Outscraper) | conta grátis no site da ferramenta | dados do Google Maps completos (nota, avaliações, telefone, site) |
 | Google Maps direto | chave do Google Cloud + cartão | a mais completa e automática |
 
+> **Só empresas SEM site:** esse é o padrão. Empresas com site são ignoradas na busca e na importação.
+> Para mudar, troque para "não" a linha *Só empresas SEM site?* na aba **Config**.
+> Se já houver empresas com site na lista, use 📍 Prospecção → *Remover da lista empresas que têm site*.
+
 ## 1. Montar a planilha (5 min)
 1. Abra https://sheets.new (uma planilha nova).
 2. Menu **Extensões → Apps Script**.

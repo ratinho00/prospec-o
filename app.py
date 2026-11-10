@@ -60,12 +60,15 @@ with aba_busca:
     nota_min = c5.number_input("Nota mínima", 0.0, 5.0, 0.0, 0.5)
     enriquecer = c6.checkbox("Enriquecer sites", value=True)
     campanha = st.text_input("Campanha (etiqueta)", "")
+    so_sem_site = st.checkbox("Só empresas SEM site", value=True)
     st.caption(f"Estimativa: até {estimar_chamadas(len(consultas), len(locais), grade, maximo)} chamadas à Places API")
     if st.button("Buscar no Google Maps", type="primary", disabled=not consultas):
         status = st.status("Buscando...", expanded=True)
         try:
             cliente = MapsMock() if mock else GoogleMaps()
             leads = buscar(cliente, consultas, locais, grade, maximo, nota_min or None, log=status.write)
+            if so_sem_site:
+                leads = [l for l in leads if not l.site]
             if enriquecer:
                 leads = enriquecer_varios(leads, mock=mock, log=status.write)
             leads = [pontuar(l) for l in leads]

@@ -32,6 +32,8 @@ def cmd_buscar(a, db: Banco):
     print(f"Estimativa: até {est} chamadas à Places API")
     cliente = MapsMock() if a.mock else GoogleMaps()
     leads = buscar(cliente, a.consulta, a.local, a.grade, a.max, a.nota_min)
+    if not a.incluir_com_site:
+        leads = [l for l in leads if not l.site]
     if a.enriquecer:
         leads = enriquecer_varios(leads, mock=a.mock)
     leads = [pontuar(l) for l in leads]
@@ -174,6 +176,7 @@ def main(argv=None):
     s.add_argument("--nota-min", type=float)
     s.add_argument("--campanha", default="")
     s.add_argument("--enriquecer", action="store_true", help="já visita os sites")
+    s.add_argument("--incluir-com-site", action="store_true", help="por padrão só entram empresas sem site")
     s.add_argument("--mock", action="store_true")
     s.set_defaults(f=cmd_buscar)
 

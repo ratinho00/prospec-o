@@ -21,7 +21,7 @@ filtros:
   nota_min: 3.0
   avaliacoes_max: 300          # ignora redes grandes
   excluir_palavras: [odontocompany, sorridents, oral sin]
-  # so_sem_site: true
+  so_sem_site: true            # só empresas SEM site
   # so_com_whatsapp: true
   # score_min: 30
 

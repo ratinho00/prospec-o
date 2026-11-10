@@ -39,6 +39,7 @@ function onOpen() {
     .addSeparator()
     .addItem('Ordenar por score', 'ordenarPorScore')
     .addItem('Refazer scores e mensagens', 'refazerTudo')
+    .addItem('Remover da lista empresas que têm site', 'removerComSite')
     .addItem('Trocar chave do Google', 'trocarChave')
     .addToUi();
 }
@@ -51,7 +52,7 @@ function configurar() {
   let cfg = ss.getSheetByName(ABA_CONFIG);
   if (!cfg) {
     cfg = ss.insertSheet(ABA_CONFIG);
-    cfg.getRange(1, 1, 9, 2).setValues([
+    cfg.getRange(1, 1, 10, 2).setValues([
       ['Configuração', 'Valor (edite a coluna B)'],
       ['Seu nome', 'Seu Nome'],
       ['Sua empresa', 'Sua Empresa'],
@@ -61,6 +62,7 @@ function configurar() {
       ['Ignorar empresas com estas palavras no nome', 'franquia, shopping'],
       ['Ignorar empresas com mais de X avaliações (0 = não ignorar)', 300],
       ['Ignorar empresas com nota abaixo de', 0],
+      ['Só empresas SEM site? (sim/não)', 'sim'],
     ]);
     cfg.getRange('A1:B1').setFontWeight('bold').setBackground('#1a73e8').setFontColor('white');
     cfg.setColumnWidth(1, 430);
@@ -151,13 +153,15 @@ function trocarChave() {
 
 function lerConfig_() {
   const aba = SpreadsheetApp.getActive().getSheetByName(ABA_CONFIG);
-  const v = aba ? aba.getRange(2, 2, 8, 1).getValues().map(r => r[0]) : [];
+  const v = aba ? aba.getRange(2, 2, 9, 1).getValues().map(r => r[0]) : [];
   return {
     nome: v[0] || '[seu nome]', empresa: v[1] || '[sua empresa]',
     beneficio: v[2] || 'atrair mais clientes pela internet', publico: v[3] || '',
     cadencia: String(v[4] || '3,7').split(',').map(x => parseInt(x, 10)).filter(x => x > 0),
     excluir: String(v[5] || '').split(',').map(x => x.trim().toLowerCase()).filter(String),
     maxAvaliacoes: Number(v[6]) || 0, notaMin: Number(v[7]) || 0,
+    // padrão: só empresas sem site (vale também se a linha não existir na aba Config)
+    soSemSite: !/^n/i.test(String(v[8] === undefined || v[8] === '' ? 'sim' : v[8]).trim()),
   };
 }
 
@@ -286,6 +290,7 @@ function deLugar_(p, busca) {
 
 function passaFiltros_(l, cfg, statusNegocio) {
   if (statusNegocio && statusNegocio !== 'OPERATIONAL') return false;
+  if (cfg.soSemSite && l.site) return false;
   if (cfg.maxAvaliacoes && l.avaliacoes > cfg.maxAvaliacoes) return false;
   if (cfg.notaMin && l.nota && l.nota < cfg.notaMin) return false;
   const nome = l.nome.toLowerCase();
@@ -779,4 +784,13 @@ function importarLista() {
     ui.ButtonSet.YES_NO);
   if (r === ui.Button.YES) aba.clear();
   ss.setActiveSheet(ss.getSheetByName(ABA_LEADS));
+}
+
+function removerComSite() {
+  const aba = SpreadsheetApp.getActive().getSheetByName(ABA_LEADS);
+  let removidas = 0;
+  for (let i = aba.getLastRow(); i >= 2; i--) {
+    if (String(aba.getRange(i, C['Site']).getValue()).trim()) { aba.deleteRow(i); removidas++; }
+  }
+  SpreadsheetApp.getActive().toast(`${removidas} empresas com site removidas`, 'Prospecção');
 }

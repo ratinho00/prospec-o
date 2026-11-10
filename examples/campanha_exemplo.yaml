@@ -1,0 +1,51 @@
+# Campanha de exemplo — rode com:
+#   python -m prospec campanha examples/campanha_exemplo.yaml --mock   (teste sem API)
+#   python -m prospec campanha examples/campanha_exemplo.yaml          (real)
+nome: dentistas-campinas
+
+# O que buscar no Google Maps (cada consulta é combinada com cada local)
+consultas:
+  - dentista
+  - clínica odontológica
+locais:
+  - Campinas, SP
+  - Valinhos, SP
+
+# 1 = uma busca por local (até 60 resultados).
+# 3 = divide cada local em 3×3 células → até 9× mais cobertura (e 9× mais chamadas).
+grade: 2
+max_por_busca: 60
+
+# Filtros aplicados antes de salvar no CRM
+filtros:
+  nota_min: 3.0
+  avaliacoes_max: 300          # ignora redes grandes
+  excluir_palavras: [odontocompany, sorridents, oral sin]
+  # so_sem_site: true
+  # so_com_whatsapp: true
+  # score_min: 30
+
+# Pesos do score (0 desliga a regra). Veja prospec/pontuacao.py para a lista completa.
+pesos:
+  sem_site: 25
+  poucas_avaliacoes: 12
+  tem_whatsapp: 12
+
+enriquecer: true               # visita os sites atrás de e-mail, Instagram, pixel etc.
+
+# Seu perfil — usado nas mensagens
+perfil:
+  meu_nome: Seu Nome
+  minha_empresa: Sua Agência
+  categoria_plural: clínicas odontológicas
+  beneficio: lotar a agenda com pacientes vindos do Google e do Instagram
+  oferta: >
+    Gestão de Google Meu Negócio, site rápido com agendamento pelo WhatsApp e
+    campanhas de tráfego pago para clínicas. Diagnóstico gratuito de 15 minutos.
+
+mensagens_top: 25              # gera mensagens para os 25 melhores leads novos
+usar_ia: false                 # true = cada mensagem personalizada pelo Claude (precisa ANTHROPIC_API_KEY)
+cadencia_dias: [3, 7]          # follow-up 3 dias após o 1º contato e 7 dias após o 2º
+
+# webhook: https://seu-n8n.com/webhook/leads   # envia os leads novos para n8n/Make/Zapier/CRM
+pasta_saida: saidas

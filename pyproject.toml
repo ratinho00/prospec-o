@@ -1,0 +1,17 @@
+[project]
+name = "prospec"
+version = "0.1.0"
+description = "Prospecção de empresas no Google Maps com enriquecimento, score, CRM e mensagens"
+requires-python = ">=3.10"
+dependencies = ["requests>=2.31", "pydantic>=2.6", "pyyaml>=6.0", "pandas>=2.0", "openpyxl>=3.1"]
+
+[project.optional-dependencies]
+web = ["streamlit>=1.40"]
+ia = ["anthropic>=2.8.0"]
+dev = ["pytest>=8"]
+
+[project.scripts]
+prospec = "prospec.cli:main"
+
+[tool.setuptools]
+packages = ["prospec"]

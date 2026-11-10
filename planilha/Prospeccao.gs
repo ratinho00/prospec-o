@@ -13,11 +13,11 @@ const COLUNAS = [
   'Score', 'Temperatura', 'Status', 'Enviei?', 'Nome', 'Categoria', 'Cidade', 'Telefone',
   'WhatsApp', 'E-mail', 'Instagram', 'Site', 'Nota', 'Avaliações', 'Oportunidades', 'Mensagem',
   'Próximo follow-up', 'Etapa', 'Notas', 'Google Maps', 'Adicionado em',
-  'Link WhatsApp', 'Celular', 'Enriquecido', 'Place ID', 'Busca',
+  'Link WhatsApp', 'Celular', 'Enriquecido', 'Place ID', 'Busca', 'Fonte',
 ];
 const C = {};
 COLUNAS.forEach((n, i) => (C[n] = i + 1));
-const OCULTAS = ['Link WhatsApp', 'Celular', 'Enriquecido', 'Place ID', 'Busca'];
+const OCULTAS = ['Link WhatsApp', 'Celular', 'Enriquecido', 'Place ID', 'Busca', 'Fonte'];
 const STATUS = ['novo', 'qualificado', 'contatado', 'respondeu', 'reuniao', 'proposta', 'fechado', 'perdido', 'nao_contatar'];
 const ABA_LEADS = 'Leads';
 const ABA_CONFIG = 'Config';
@@ -32,7 +32,9 @@ const CAMPOS_MAPS = [
 function onOpen() {
   SpreadsheetApp.getUi().createMenu('📍 Prospecção')
     .addItem('1. Configurar', 'configurar')
-    .addItem('2. Buscar empresas no Google Maps', 'buscarEmpresas')
+    .addItem('2. Buscar empresas GRÁTIS (sem chave)', 'buscarGratis')
+    .addItem('2. Importar lista pronta (Apify, Outscraper, CSV)', 'importarLista')
+    .addItem('2. Buscar no Google Maps (precisa de chave)', 'buscarEmpresas')
     .addItem('3. Analisar sites (e-mail, Instagram, pixel...)', 'analisarSites')
     .addSeparator()
     .addItem('Ordenar por score', 'ordenarPorScore')
@@ -93,10 +95,9 @@ function configurar() {
 
   criarAbasDeApoio_(ss);
 
-  if (!PropertiesService.getDocumentProperties().getProperty('CHAVE')) trocarChave();
   ui.alert('Pronto!',
     '1) Preencha seus dados na aba "Config".\n' +
-    '2) Use o menu 📍 Prospecção → "Buscar empresas no Google Maps".\n\n' +
+    '2) Use o menu 📍 Prospecção → "Buscar empresas GRÁTIS (sem chave)".\n\n' +
     'Depois de mandar uma mensagem, marque a caixa "Enviei?" do lead: a planilha muda o status, ' +
     'agenda o follow-up e já prepara a próxima mensagem.', ui.ButtonSet.OK);
 }
@@ -163,8 +164,12 @@ function lerConfig_() {
 // ======================= busca no Google Maps =======================
 function buscarEmpresas() {
   const ui = SpreadsheetApp.getUi();
-  const chave = PropertiesService.getDocumentProperties().getProperty('CHAVE');
-  if (!chave) return configurar();
+  let chave = PropertiesService.getDocumentProperties().getProperty('CHAVE');
+  if (!chave) {
+    trocarChave();
+    chave = PropertiesService.getDocumentProperties().getProperty('CHAVE');
+    if (!chave) return ui.alert('Sem chave do Google, use "Buscar empresas GRÁTIS" ou "Importar lista pronta".');
+  }
   const aba = SpreadsheetApp.getActive().getSheetByName(ABA_LEADS);
   if (!aba) return configurar();
 
@@ -311,11 +316,12 @@ function pontuar_(l) {
     if (enr.indexOf('analytics') < 0) add(5, 'Sem Google Analytics');
     if (!l.instagram) add(8, 'Instagram não encontrado');
   }
-  if (Number(l.avaliacoes) < 20) add(12, `Poucas avaliações (${l.avaliacoes})`);
+  const temAval = l.avaliacoes !== '' && l.avaliacoes !== null && l.avaliacoes !== undefined;
+  if (temAval && Number(l.avaliacoes) < 20) add(12, `Poucas avaliações (${l.avaliacoes})`);
   if (l.nota && Number(l.nota) < 4.2) add(8, `Nota baixa (${l.nota})`);
   if (l.celular) add(12, 'Tem WhatsApp');
   if (l.email) add(5, 'Tem e-mail');
-  if (Number(l.avaliacoes) >= 50) add(6, 'Negócio estabelecido');
+  if (temAval && Number(l.avaliacoes) >= 50) add(6, 'Negócio estabelecido');
   l.score = Math.min(100, pts);
   l.temperatura = l.score >= 55 ? 'quente' : l.score >= 30 ? 'morno' : 'frio';
   l.oportunidades = motivos.join('; ');
@@ -370,7 +376,7 @@ function paraLinha_(l) {
   s('Mensagem', l.mensagem); s('Próximo follow-up', l.followup); s('Etapa', l.etapa); s('Notas', l.notas);
   s('Google Maps', l.maps); s('Adicionado em', l.adicionado); s('Link WhatsApp', l.link);
   s('Celular', l.celular ? "'" + l.celular : ''); s('Enriquecido', l.enriquecido); s('Place ID', l.placeId);
-  s('Busca', l.busca);
+  s('Busca', l.busca); s('Fonte', l.fonte || 'Google Maps');
   return r;
 }
 
@@ -383,7 +389,7 @@ function deLinha_(r) {
     oportunidades: g('Oportunidades'), mensagem: g('Mensagem'), followup: g('Próximo follow-up'),
     etapa: Number(g('Etapa')) || 0, notas: g('Notas'), maps: g('Google Maps'), adicionado: g('Adicionado em'),
     link: g('Link WhatsApp'), celular: String(g('Celular') || ''), enriquecido: g('Enriquecido'),
-    placeId: g('Place ID'), busca: g('Busca'),
+    placeId: g('Place ID'), busca: g('Busca'), fonte: g('Fonte'),
   };
 }
 
@@ -523,4 +529,254 @@ function letra_(n) {
   let s = '';
   while (n > 0) { const m = (n - 1) % 26; s = String.fromCharCode(65 + m) + s; n = Math.floor((n - 1) / 26); }
   return s;
+}
+
+// ======================= adicionar leads (comum a todas as fontes) =======================
+function adicionar_(novos) {
+  const aba = SpreadsheetApp.getActive().getSheetByName(ABA_LEADS);
+  const cfg = lerConfig_();
+  const existentes = new Set(aba.getLastRow() > 1
+    ? aba.getRange(2, C['Place ID'], aba.getLastRow() - 1).getValues().map(r => String(r[0])) : []);
+  const nomesTel = new Set(aba.getLastRow() > 1
+    ? aba.getRange(2, C['Nome'], aba.getLastRow() - 1).getValues().map(r => String(r[0]).toLowerCase()) : []);
+  const ok = [];
+  novos.forEach(l => {
+    const chave = String(l.placeId);
+    if (!l.nome || existentes.has(chave) || nomesTel.has(l.nome.toLowerCase())) return;
+    if (!passaFiltros_(l, cfg, l.statusNegocio)) return;
+    existentes.add(chave);
+    nomesTel.add(l.nome.toLowerCase());
+    ok.push(preparar_(l, cfg));
+  });
+  gravar_(aba, ok);
+  ordenarPorScore();
+  return ok.length;
+}
+
+function leadVazio_() {
+  return { status: 'novo', etapa: 0, nome: '', categoria: '', cidade: '', telefone: '', celular: '',
+    email: '', instagram: '', site: '', nota: '', avaliacoes: '', maps: '', placeId: '', enriquecido: '',
+    busca: '', notas: '', followup: '', adicionado: new Date(), fonte: '' };
+}
+
+function semAcento_(t) {
+  return String(t || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+}
+
+function primeiroCelular_(lista) {
+  for (const t of lista) {
+    for (const parte of String(t || '').split(/[;,/]/)) {
+      const e = paraE164_(parte);
+      if (ehCelular_(e)) return e;
+    }
+  }
+  return '';
+}
+
+function comHttp_(u) {
+  u = String(u || '').trim();
+  return !u ? '' : /^https?:\/\//i.test(u) ? u : 'https://' + u;
+}
+
+// ======================= busca grátis: OpenStreetMap =======================
+// Sem chave e sem cartão. Cobre menos empresas que o Google Maps e não tem nota/avaliações,
+// mas traz nome, telefone, WhatsApp, site, e-mail e Instagram quando cadastrados.
+const CATEGORIAS_OSM = [
+  [/dentist|odonto/, ['["amenity"="dentist"]']],
+  [/clinica|medic|consultorio/, ['["amenity"~"^(clinic|doctors)$"]', '["healthcare"~"^(clinic|doctor)$"]']],
+  [/fisioterap/, ['["healthcare"="physiotherapist"]']],
+  [/psicolog/, ['["healthcare"~"^(psychotherapist|psychologist)$"]']],
+  [/laboratorio/, ['["healthcare"="laboratory"]']],
+  [/farmacia|drogaria/, ['["amenity"="pharmacy"]']],
+  [/veterinar/, ['["amenity"="veterinary"]']],
+  [/pet/, ['["shop"="pet"]', '["shop"="pet_grooming"]']],
+  [/pizzaria|pizza/, ['["cuisine"~"pizza"]']],
+  [/restaurante/, ['["amenity"="restaurant"]']],
+  [/lanchonete|hamburguer|fast/, ['["amenity"="fast_food"]']],
+  [/cafe/, ['["amenity"="cafe"]']],
+  [/bar\b|boteco|pub/, ['["amenity"~"^(bar|pub)$"]']],
+  [/padaria/, ['["shop"="bakery"]']],
+  [/sorvet|acai/, ['["amenity"="ice_cream"]', '["shop"="ice_cream"]']],
+  [/salao|cabeleire|barbear/, ['["shop"="hairdresser"]']],
+  [/estetica|beleza|manicure|unha/, ['["shop"~"^(beauty|cosmetics)$"]']],
+  [/academia|crossfit|pilates/, ['["leisure"="fitness_centre"]', '["sport"="pilates"]']],
+  [/oficina|mecanic|funilaria/, ['["shop"="car_repair"]']],
+  [/auto ?peca/, ['["shop"="car_parts"]']],
+  [/lava ?(jato|rapido)/, ['["amenity"="car_wash"]']],
+  [/imobiliar|corretor/, ['["office"="estate_agent"]']],
+  [/advoca|advogad/, ['["office"="lawyer"]']],
+  [/contab|contador/, ['["office"="accountant"]']],
+  [/hotel|pousada|hostel/, ['["tourism"~"^(hotel|guest_house|hostel|motel)$"]']],
+  [/autoescola|auto escola/, ['["amenity"="driving_school"]']],
+  [/escola|colegio/, ['["amenity"~"^(school|kindergarten)$"]']],
+  [/curso|idioma|ingles/, ['["amenity"="language_school"]', '["office"="educational_institution"]']],
+  [/supermercado|mercado/, ['["shop"~"^(supermarket|convenience)$"]']],
+  [/roupa|moda|boutique/, ['["shop"~"^(clothes|boutique)$"]']],
+  [/calcad|sapat/, ['["shop"="shoes"]']],
+  [/otica/, ['["shop"="optician"]']],
+  [/floricultura|flores/, ['["shop"="florist"]']],
+  [/papelaria/, ['["shop"="stationery"]']],
+  [/construcao|ferragem/, ['["shop"~"^(hardware|doityourself)$"]']],
+  [/movei|moveis|decoracao/, ['["shop"~"^(furniture|interior_decoration)$"]']],
+  [/lavanderia/, ['["shop"~"^(laundry|dry_cleaning)$"]']],
+  [/celular|informatica|eletronic/, ['["shop"~"^(mobile_phone|computer|electronics)$"]']],
+  [/joalheria|relojoaria/, ['["shop"~"^(jewelry|watches)$"]']],
+];
+
+function buscarGratis() {
+  const ui = SpreadsheetApp.getUi();
+  if (!SpreadsheetApp.getActive().getSheetByName(ABA_LEADS)) configurar();
+  const r1 = ui.prompt('O que buscar?', 'Separe por vírgula. Ex.: dentista, salão de beleza, academia', ui.ButtonSet.OK_CANCEL);
+  if (r1.getSelectedButton() !== ui.Button.OK) return;
+  const r2 = ui.prompt('Em qual cidade?', 'Separe por ponto e vírgula. Ex.: Campinas, SP; Valinhos, SP', ui.ButtonSet.OK_CANCEL);
+  if (r2.getSelectedButton() !== ui.Button.OK) return;
+  const termos = r1.getResponseText().split(',').map(s => s.trim()).filter(String);
+  const locais = r2.getResponseText().split(';').map(s => s.trim()).filter(String);
+  if (!termos.length || !locais.length) return;
+
+  const novos = [];
+  const erros = [];
+  for (const local of locais) {
+    let area;
+    try { area = areaOsm_(local); } catch (e) { erros.push(e.message); continue; }
+    for (const termo of termos) {
+      try {
+        elementosOsm_(termo, area).forEach(el => novos.push(deOsm_(el, termo, local)));
+      } catch (e) { erros.push(`${termo} em ${local}: ${e.message}`); }
+    }
+  }
+  const n = adicionar_(novos);
+  ui.alert('Busca grátis concluída',
+    `${novos.length} empresas encontradas no OpenStreetMap, ${n} novas adicionadas.\n\n` +
+    (erros.length ? 'Avisos:\n' + erros.join('\n') + '\n\n' : '') +
+    'Dica: rode "Analisar sites" para achar e-mails e Instagram.\n' +
+    'Se vierem poucas empresas, use "Importar lista pronta" (dados do Google Maps).', ui.ButtonSet.OK);
+}
+
+function areaOsm_(local) {
+  const url = 'https://nominatim.openstreetmap.org/search?format=jsonv2&limit=5&countrycodes=br&accept-language=pt-BR&q=' +
+    encodeURIComponent(local);
+  // plano B: se o Nominatim recusar, procura a cidade pelo nome direto no Overpass
+  const cidade = local.split(',')[0].replace(/["\\]/g, '').trim();
+  const porNome = `area["name"="${cidade}"]["boundary"="administrative"]["admin_level"="8"]->.a;`;
+  try {
+    const r = UrlFetchApp.fetch(url, { muteHttpExceptions: true });
+    Utilities.sleep(1100); // regra de uso do Nominatim: 1 consulta por segundo
+    if (r.getResponseCode() !== 200) return porNome;
+    const lugar = JSON.parse(r.getContentText()).find(x => x.osm_type === 'relation');
+    return lugar ? `area(id:${3600000000 + Number(lugar.osm_id)})->.a;` : porNome;
+  } catch (e) {
+    return porNome;
+  }
+}
+
+function elementosOsm_(termo, area) {
+  const t = semAcento_(termo);
+  const filtros = [];
+  CATEGORIAS_OSM.forEach(([rx, tags]) => { if (rx.test(t)) tags.forEach(x => filtros.push(x)); });
+  const nome = termo.replace(/["\\.*+?^${}()|[\]]/g, '').trim();
+  if (nome) filtros.push(`["name"~"${nome}",i]`);
+  const q = `[out:json][timeout:90];${area}(` +
+    filtros.map(f => `nwr${f}["name"](area.a);`).join('') + `);out center tags 1000;`;
+  const servidores = ['https://overpass-api.de/api/interpreter', 'https://overpass.kumi.systems/api/interpreter'];
+  for (const s of servidores) {
+    const r = UrlFetchApp.fetch(s, { method: 'post', payload: { data: q }, muteHttpExceptions: true });
+    if (r.getResponseCode() === 200) return JSON.parse(r.getContentText()).elements || [];
+    Utilities.sleep(2000);
+  }
+  throw new Error('o OpenStreetMap está ocupado agora; tente de novo em alguns minutos');
+}
+
+function deOsm_(el, termo, local) {
+  const t = el.tags || {};
+  const l = leadVazio_();
+  const tel = t['contact:phone'] || t.phone || '';
+  l.nome = t.name || '';
+  l.categoria = termo;
+  l.cidade = t['addr:city'] || local.split(',')[0].trim();
+  l.telefone = String(tel).split(';')[0].trim();
+  l.celular = primeiroCelular_([t['contact:whatsapp'], t['contact:mobile'], t.mobile, tel]);
+  l.site = comHttp_(t.website || t['contact:website'] || t.url);
+  l.email = t.email || t['contact:email'] || '';
+  const ig = t['contact:instagram'] || '';
+  l.instagram = !ig ? '' : /^https?:/.test(ig) ? ig : 'https://instagram.com/' + ig.replace(/^@/, '');
+  l.maps = 'https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(`${l.nome} ${l.cidade}`);
+  l.placeId = `osm:${el.type}/${el.id}`;
+  l.busca = `${termo} em ${local}`;
+  l.fonte = 'OpenStreetMap';
+  return l;
+}
+
+// ======================= importar lista pronta (Apify, Outscraper, CSV) =======================
+const APELIDOS = {
+  nome: ['title', 'name', 'nome', 'empresa', 'razaosocial', 'nomefantasia'],
+  telefone: ['phone', 'phoneunformatted', 'telefone', 'phone1', 'fone', 'celular', 'whatsapp'],
+  site: ['website', 'site', 'domain', 'sitio'],
+  nota: ['totalscore', 'rating', 'nota', 'avaliacao'],
+  avaliacoes: ['reviewscount', 'reviews', 'avaliacoes', 'numerodeavaliacoes', 'userratingcount'],
+  categoria: ['categoryname', 'category', 'type', 'categoria', 'subtypes', 'segmento'],
+  cidade: ['city', 'cidade', 'municipio'],
+  maps: ['url', 'locationlink', 'googlemapsurl', 'maps', 'link', 'googlemaps'],
+  placeId: ['placeid', 'googleid', 'cid', 'id'],
+  email: ['email', 'emails0', 'email1', 'emails', 'e-mail'],
+  instagram: ['instagram', 'instagrams0', 'instagram1'],
+  status: ['businessstatus', 'permanentlyclosed', 'temporarilyclosed', 'status'],
+};
+
+function importarLista() {
+  const ss = SpreadsheetApp.getActive();
+  const ui = SpreadsheetApp.getUi();
+  if (!ss.getSheetByName(ABA_LEADS)) configurar();
+  let aba = ss.getSheetByName('Importar');
+  if (!aba || aba.getLastRow() < 2) {
+    if (!aba) aba = ss.insertSheet('Importar');
+    ss.setActiveSheet(aba);
+    return ui.alert('Importar lista',
+      'Cole na aba "Importar", a partir da célula A1, a planilha exportada do Apify, Outscraper ou ' +
+      'qualquer lista com cabeçalho (nome, telefone, site...).\n\n' +
+      'Dica: abra o arquivo baixado, aperte Ctrl+A e Ctrl+C, clique em A1 desta aba e aperte Ctrl+V.\n\n' +
+      'Depois rode de novo: 📍 Prospecção → Importar lista pronta.', ui.ButtonSet.OK);
+  }
+  const dados = aba.getDataRange().getValues();
+  const cab = dados[0].map(h => semAcento_(h).replace(/[^a-z0-9]/g, ''));
+  const idx = {};
+  Object.keys(APELIDOS).forEach(k => {
+    for (const a of APELIDOS[k]) {
+      const i = cab.indexOf(a.replace(/[^a-z0-9]/g, ''));
+      if (i >= 0) { idx[k] = i; break; }
+    }
+  });
+  if (idx.nome === undefined) {
+    return ui.alert('Não achei a coluna com o nome das empresas. A primeira linha precisa ter o cabeçalho (ex.: "title" ou "nome").');
+  }
+  const v = (r, k) => (idx[k] === undefined ? '' : r[idx[k]]);
+  const novos = dados.slice(1).map((r, n) => {
+    const l = leadVazio_();
+    l.nome = String(v(r, 'nome')).trim();
+    l.telefone = String(v(r, 'telefone')).trim();
+    l.celular = primeiroCelular_([l.telefone]);
+    l.site = comHttp_(v(r, 'site'));
+    l.nota = v(r, 'nota') === '' ? '' : Number(String(v(r, 'nota')).replace(',', '.')) || '';
+    l.avaliacoes = v(r, 'avaliacoes') === '' ? '' : Number(v(r, 'avaliacoes')) || 0;
+    l.categoria = String(v(r, 'categoria')).split(',')[0].trim();
+    l.cidade = String(v(r, 'cidade')).trim();
+    l.maps = String(v(r, 'maps')).trim();
+    l.email = String(v(r, 'email')).split(/[,;\s]/)[0].trim();
+    l.instagram = String(v(r, 'instagram')).trim();
+    l.placeId = String(v(r, 'placeId') || 'import:' + semAcento_(l.nome) + ':' + paraE164_(l.telefone)).trim();
+    const st = String(v(r, 'status')).toUpperCase();
+    l.statusNegocio = st === 'TRUE' || /CLOSED/.test(st) ? 'CLOSED' : '';
+    l.fonte = 'Importado';
+    l.busca = 'importação';
+    if (!l.maps && l.nome) {
+      l.maps = 'https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(`${l.nome} ${l.cidade}`);
+    }
+    return l;
+  });
+  const n = adicionar_(novos);
+  const r = ui.alert('Importação concluída',
+    `${n} empresas novas adicionadas à aba Leads (de ${novos.length} linhas).\n\nLimpar a aba "Importar" para a próxima lista?`,
+    ui.ButtonSet.YES_NO);
+  if (r === ui.Button.YES) aba.clear();
+  ss.setActiveSheet(ss.getSheetByName(ABA_LEADS));
 }

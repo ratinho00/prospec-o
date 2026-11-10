@@ -1,44 +1,60 @@
 # Prospecção no Google Planilhas (sem instalar nada)
 
-## 1. Criar a chave do Google Maps (uma vez só, ~10 min)
-1. Acesse https://console.cloud.google.com/ → crie um projeto.
-2. Menu ☰ → **Faturamento** → vincule um cartão (necessário mesmo para a cota gratuita).
-   Dica: em *Orçamentos e alertas*, crie um alerta de gasto.
-3. Menu ☰ → **APIs e serviços → Biblioteca** → ative **Places API (New)** e **Geocoding API**.
-4. **APIs e serviços → Credenciais → Criar credenciais → Chave de API** → copie a chave (`AIza...`).
-   Em *Editar chave → Restrições de API*, deixe só as duas APIs acima.
+Você **não precisa** de chave do Google nem de cartão. Escolha uma das três formas de trazer empresas:
 
-## 2. Montar a planilha (5 min)
+| Forma | Precisa de quê | Qualidade dos dados |
+|---|---|---|
+| **Busca grátis (OpenStreetMap)** | nada | cobre menos empresas que o Google e não tem nota/avaliações |
+| **Importar lista pronta** (Apify, Outscraper) | conta grátis no site da ferramenta | dados do Google Maps completos (nota, avaliações, telefone, site) |
+| Google Maps direto | chave do Google Cloud + cartão | a mais completa e automática |
+
+## 1. Montar a planilha (5 min)
 1. Abra https://sheets.new (uma planilha nova).
 2. Menu **Extensões → Apps Script**.
 3. Apague o conteúdo que aparecer, cole todo o arquivo `Prospeccao.gs` e clique no 💾 (Salvar).
 4. Volte para a planilha e **recarregue a página (F5)**. Aparece o menu **📍 Prospecção**.
 5. Clique em **📍 Prospecção → 1. Configurar**. Na primeira vez o Google pede autorização:
    *Continuar → escolha sua conta → Avançado → Acessar (não seguro) → Permitir*.
-   (O aviso aparece porque o script é seu e não foi publicado; ele só acessa esta planilha e o Google Maps.)
-6. Cole a chave do Google quando pedir.
-7. Na aba **Config**, preencha seu nome, empresa e o benefício que você oferece.
+   (O aviso aparece porque o script é seu e não foi publicado.)
+6. Na aba **Config**, preencha seu nome, empresa e o benefício que você oferece.
 
-## 3. Usar
-- **Buscar:** 📍 Prospecção → *Buscar empresas* → digite o que buscar (`dentista, clínica odontológica`),
-  onde (`Campinas, SP; Valinhos, SP`) e a cobertura (1 normal; 2 ou 3 para cidade grande).
+## 2. Trazer empresas
+
+### Opção A — Busca grátis (nenhum cadastro)
+📍 Prospecção → **Buscar empresas GRÁTIS** → digite o que buscar (`dentista, salão de beleza`) e a
+cidade (`Campinas, SP`). Pronto.
+
+### Opção B — Importar lista do Google Maps pelo Apify (mais empresas, com nota e avaliações)
+1. Crie uma conta grátis em https://apify.com (dá para entrar com a conta do Google; o plano grátis
+   tem um crédito mensal que dá para algumas centenas de empresas).
+2. Abra a ferramenta **Google Maps Scraper** (https://apify.com/compass/crawler-google-places) e clique em **Try for free**.
+3. Em *Search term(s)* escreva `dentista`; em *Location* escreva `Campinas, SP`; em *Number of places* coloque 100. Clique em **Start**.
+4. Quando terminar, clique em **Export → CSV** (ou Excel) e baixe.
+5. Abra o arquivo, selecione tudo (Ctrl+A), copie (Ctrl+C), vá na planilha, menu
+   📍 Prospecção → **Importar lista pronta** (cria a aba *Importar*), clique em A1 e cole (Ctrl+V).
+6. Rode de novo 📍 Prospecção → **Importar lista pronta**. As empresas vão para a aba **Leads** com score e mensagem.
+
+Funciona igual com o Outscraper (https://outscraper.com) ou com qualquer planilha que tenha cabeçalho
+(nome, telefone, site...).
+
+## 3. Usar no dia a dia
 - **Analisar sites (opcional):** 📍 Prospecção → *Analisar sites* — encontra e-mail, Instagram, WhatsApp
-  e se o site tem pixel/Analytics, e recalcula o score. Se tiver muitos sites, rode mais de uma vez.
-- **Abordar:** na aba **Leads**, os melhores ficam no topo (coluna *Score*). Clique em **💬** na coluna
-  *WhatsApp*: abre a conversa com a mensagem pronta. Revise e envie.
-- **Marcar o envio:** marque a caixa **Enviei?**. A planilha muda o status para *contatado*, agenda o
-  follow-up (3 e depois 7 dias — ajustável em Config) e já troca a mensagem pela próxima da sequência.
-- **Follow-ups do dia:** aba **Follow-ups** (atualiza sozinha).
-- **Funil:** mude a coluna *Status* (respondeu, reuniao, proposta, fechado, perdido, nao_contatar) e
-  acompanhe na aba **Funil**.
+  e se o site tem pixel/Analytics. Se tiver muitos sites, rode mais de uma vez.
+- **Abordar:** na aba **Leads**, os melhores ficam no topo. Clique em **💬** na coluna *WhatsApp*:
+  abre a conversa com a mensagem pronta. Revise e envie.
+- **Marcar o envio:** marque **Enviei?**. A planilha muda o status para *contatado*, agenda o follow-up
+  (3 e depois 7 dias — ajustável em Config) e já troca a mensagem pela próxima.
+- **Follow-ups do dia:** aba **Follow-ups**.
+- **Funil:** mude a coluna *Status* e acompanhe na aba **Funil**.
+- A coluna **Google Maps** abre o perfil da empresa no Google (útil para ver a nota nos leads do OpenStreetMap).
 
 No celular (app do Google Planilhas) dá para clicar no WhatsApp, marcar *Enviei?* e mudar o status.
-O menu 📍 Prospecção (busca) só aparece no computador.
+O menu 📍 Prospecção só aparece no computador.
 
 ## Problemas comuns
 | Mensagem | Solução |
 |---|---|
-| `Google Maps respondeu 403` | ative a **Places API (New)** e o faturamento; confira as restrições da chave |
-| `Não achei "..." (Geocoding...)` | ative a **Geocoding API** ou use cobertura 1 |
+| "OpenStreetMap está ocupado" | espere alguns minutos e tente de novo |
+| Poucas empresas na busca grátis | normal em algumas cidades — use a Opção B |
+| "Não achei a coluna com o nome" | a primeira linha da aba *Importar* precisa ser o cabeçalho |
 | Menu não aparece | recarregue a planilha; confira se salvou o script |
-| Trocar a chave | 📍 Prospecção → *Trocar chave do Google* |

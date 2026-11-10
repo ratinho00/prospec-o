@@ -5,6 +5,9 @@ avaliações...), pontua quem tem mais chance de comprar, guarda tudo num **CRM*
 follow-ups e escreve as **mensagens de abordagem** (WhatsApp, e-mail e ligação), inclusive
 personalizadas com IA.
 
+> **Quer algo sem instalar nada?** Veja a versão para Google Planilhas em
+> [`planilha/LEIA-ME.md`](planilha/LEIA-ME.md): copiar, colar e usar.
+
 ## O que ele faz
 
 | Função | Como |

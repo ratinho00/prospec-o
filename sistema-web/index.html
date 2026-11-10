@@ -1,0 +1,673 @@
+<title>Prospec</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@500;600&display=swap">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+/* Layout: barra fixa com abas; coluna única de cartões de lead, larga no computador e empilhada no celular. */
+:root {
+  --bg: #f3f6f5; --surface: #ffffff; --surface-2: #e8eeec; --line: #d3dcd9;
+  --fg: #14211e; --muted: #5a6b67; --accent: #0d6e5f; --accent-fg: #ffffff; --accent-soft: #d5ece7;
+  --hot: #c2410c; --hot-soft: #fde4d6; --warm: #a16207; --warm-soft: #fbefc9; --cold: #3f5f8a; --cold-soft: #dde7f5;
+  --ok: #15803d; --danger: #b42318;
+  --font-ui: "Manrope", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-num: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+  --r: 10px;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #0f1614; --surface: #17211e; --surface-2: #1f2c28; --line: #2c3c37;
+  --fg: #e4ece9; --muted: #93a6a1; --accent: #3cbfa6; --accent-fg: #062520; --accent-soft: #173d36;
+  --hot: #fb8a5c; --hot-soft: #3d2117; --warm: #e8b84a; --warm-soft: #3a2f12; --cold: #8fb0e0; --cold-soft: #1c2a40;
+  --ok: #4ade80; --danger: #f87171; color-scheme: dark; } }
+:root[data-theme="dark"] {
+  --bg: #0f1614; --surface: #17211e; --surface-2: #1f2c28; --line: #2c3c37;
+  --fg: #e4ece9; --muted: #93a6a1; --accent: #3cbfa6; --accent-fg: #062520; --accent-soft: #173d36;
+  --hot: #fb8a5c; --hot-soft: #3d2117; --warm: #e8b84a; --warm-soft: #3a2f12; --cold: #8fb0e0; --cold-soft: #1c2a40;
+  --ok: #4ade80; --danger: #f87171; color-scheme: dark; }
+
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--fg); font-family: var(--font-ui); font-size: 15px; line-height: 1.5; }
+body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); z-index: 10; background: var(--surface); }
+a { color: var(--accent); }
+button, input, select, textarea { font: inherit; color: inherit; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+.top { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5; background: var(--surface); border-bottom: 1px solid var(--line); }
+.top-in, .main { max-width: 1040px; margin: 0 auto; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+.top-in { display: flex; align-items: center; gap: 20px; padding-block: 10px 0; flex-wrap: wrap; }
+.brand { display: flex; align-items: center; gap: 8px; font-weight: 800; font-size: 18px; letter-spacing: -0.01em; padding-bottom: 10px; }
+.brand svg { width: 22px; height: 22px; color: var(--accent); }
+.tabs { display: flex; gap: 2px; overflow-x: auto; flex: 1; min-width: 0; scrollbar-width: none; }
+.tabs a { text-decoration: none; color: var(--muted); font-weight: 600; padding: 8px 12px 12px; border-bottom: 2px solid transparent; white-space: nowrap; }
+.tabs a[aria-current="page"] { color: var(--fg); border-color: var(--accent); }
+.tabs .count { font-family: var(--font-num); font-size: 12px; background: var(--surface-2); border-radius: 99px; padding: 1px 7px; margin-left: 4px; }
+
+.main { padding-block: 22px 60px; display: grid; gap: 18px; }
+h1 { font-size: 24px; margin: 0; letter-spacing: -0.02em; text-wrap: balance; }
+h2 { font-size: 17px; margin: 0; text-wrap: balance; }
+.sub { color: var(--muted); margin: 4px 0 0; max-width: 65ch; }
+.row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+.spread { justify-content: space-between; }
+
+.panel { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); padding: 18px; display: grid; gap: 14px; min-width: 0; }
+.btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; border: 1px solid var(--line); background: var(--surface); border-radius: 8px; padding: 8px 14px; font-weight: 600; cursor: pointer; text-decoration: none; color: var(--fg); min-height: 38px; }
+.btn:hover { border-color: var(--accent); }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-fg); }
+.btn.wa { background: #1f9d55; border-color: #1f9d55; color: #fff; }
+.btn.ghost { border-color: transparent; background: transparent; color: var(--muted); }
+.btn.danger { color: var(--danger); }
+.btn[disabled] { opacity: .5; cursor: not-allowed; }
+.btn svg { width: 16px; height: 16px; }
+
+label.f { display: grid; gap: 4px; font-weight: 600; font-size: 13px; color: var(--muted); min-width: 0; }
+input[type=text], input[type=number], input[type=date], input[type=search], select, textarea {
+  background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; width: 100%; min-height: 38px; }
+textarea { resize: vertical; line-height: 1.45; }
+.grid2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; }
+
+.filters { display: grid; grid-template-columns: 2fr 1fr 1fr; gap: 10px; }
+@media (max-width: 640px) { .filters { grid-template-columns: 1fr 1fr; } .filters .grow { grid-column: 1 / -1; } }
+
+.lead { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); display: grid; grid-template-columns: 56px 1fr; gap: 14px; padding: 14px; min-width: 0; }
+.score { width: 56px; height: 56px; border-radius: 12px; display: grid; place-items: center; align-content: center; font-family: var(--font-num); font-weight: 600; font-size: 20px; line-height: 1; }
+.score small { font-family: var(--font-ui); font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; margin-top: 4px; }
+.t-quente { background: var(--hot-soft); color: var(--hot); }
+.t-morno { background: var(--warm-soft); color: var(--warm); }
+.t-frio { background: var(--cold-soft); color: var(--cold); }
+.lead-body { display: grid; gap: 8px; min-width: 0; }
+.lead-name { font-weight: 700; font-size: 16px; overflow-wrap: anywhere; }
+.meta { color: var(--muted); font-size: 13px; display: flex; flex-wrap: wrap; gap: 4px 12px; }
+.num { font-family: var(--font-num); font-variant-numeric: tabular-nums; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip { font-size: 12px; font-weight: 600; background: var(--surface-2); border-radius: 99px; padding: 2px 9px; }
+.chip.st { background: var(--accent-soft); color: var(--accent); }
+.chip.due { background: var(--hot-soft); color: var(--hot); }
+.chip.ex { background: var(--warm-soft); color: var(--warm); }
+.actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.actions select { width: auto; min-width: 140px; }
+.details { border-top: 1px dashed var(--line); padding-top: 12px; display: grid; gap: 12px; }
+.hist { font-size: 13px; color: var(--muted); display: grid; gap: 2px; }
+
+.empty { text-align: center; padding: 34px 18px; color: var(--muted); display: grid; gap: 10px; justify-items: center; }
+.empty strong { color: var(--fg); font-size: 16px; }
+.steps { margin: 0; padding-left: 20px; display: grid; gap: 8px; max-width: 70ch; }
+.steps li::marker { font-family: var(--font-num); color: var(--accent); }
+.drop { border: 2px dashed var(--line); border-radius: var(--r); padding: 26px; text-align: center; color: var(--muted); display: grid; gap: 8px; justify-items: center; }
+.drop.over { border-color: var(--accent); background: var(--accent-soft); }
+.note { font-size: 13px; color: var(--muted); }
+.notice { border-radius: 8px; padding: 10px 12px; background: var(--accent-soft); color: var(--fg); font-size: 14px; }
+.notice.err { background: var(--hot-soft); }
+
+.stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; }
+.stat { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); padding: 14px; }
+.stat b { display: block; font-family: var(--font-num); font-size: 26px; font-weight: 600; }
+.stat span { color: var(--muted); font-size: 13px; font-weight: 600; }
+.bars { display: grid; gap: 8px; }
+.bar { display: grid; grid-template-columns: 120px 1fr 44px; gap: 10px; align-items: center; font-size: 14px; }
+.bar i { display: block; height: 14px; border-radius: 4px; background: var(--accent); min-width: 2px; }
+.bar .track { background: var(--surface-2); border-radius: 4px; }
+.bar .num { text-align: right; }
+
+.toast { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(18px + env(safe-area-inset-bottom, 0px)); background: var(--fg); color: var(--bg); padding: 10px 16px; border-radius: 8px; font-weight: 600; z-index: 20; max-width: calc(100% - 32px); }
+@media (prefers-reduced-motion: no-preference) { .toast { animation: up .2s ease-out; } @keyframes up { from { opacity: 0; transform: translate(-50%, 8px); } } }
+</style>
+
+<header class="top">
+  <div class="top-in">
+    <div class="brand"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 21s-7-6.2-7-11.5A7 7 0 0 1 19 9.5C19 14.8 12 21 12 21z"/><circle cx="12" cy="9.5" r="2.5"/></svg>Prospec</div>
+    <nav class="tabs" id="tabs" aria-label="Seções">
+      <a href="#hoje" data-view="hoje">Hoje<span class="count" id="c-hoje">0</span></a>
+      <a href="#leads" data-view="leads">Leads<span class="count" id="c-leads">0</span></a>
+      <a href="#adicionar" data-view="adicionar">Adicionar empresas</a>
+      <a href="#funil" data-view="funil">Funil</a>
+      <a href="#ajustes" data-view="ajustes">Ajustes</a>
+    </nav>
+  </div>
+</header>
+<main class="main" id="app"></main>
+
+<script>
+/* ===================== estado ===================== */
+const STATUS = ['novo','qualificado','contatado','respondeu','reuniao','proposta','fechado','perdido','nao_contatar'];
+const STATUS_ROTULO = { novo:'Novo', qualificado:'Qualificado', contatado:'Contatado', respondeu:'Respondeu', reuniao:'Reunião', proposta:'Proposta', fechado:'Fechado', perdido:'Perdido', nao_contatar:'Não contatar' };
+const ATIVOS = ['contatado','respondeu','reuniao','proposta'];
+const PADRAO = {
+  nome: '', empresa: '', publico: '',
+  beneficio: 'ter um site profissional e aparecer para mais clientes no Google',
+  cadencia: '3, 7', soSemSite: true,
+  msgs: [
+    'Oi, tudo bem? Aqui é {meu_nome}, da {minha_empresa}. Encontrei o perfil "{nome}" no Google Maps e reparei que {gancho}. Ajudo {publico} de {cidade} a {beneficio}. Posso te mandar uma ideia rápida de como faríamos isso para vocês?',
+    'Oi! Passando de novo por aqui 🙂 Separei 2 sugestões práticas para o "{nome}" atrair mais clientes pelo Google. Quer que eu te mande por aqui mesmo?',
+    'Último contato da minha parte, prometo! Se fizer sentido conversar sobre {beneficio}, é só me responder. Se não for o momento, sem problema. Muito sucesso para vocês!',
+  ],
+};
+const S = { db: null, sample: null, downloads: null, leads: new Map(), cfg: { ...PADRAO }, loaded: false, slow: false, erro: '',
+  view: 'hoje', filtro: { q: '', status: 'abertos', temp: '' }, aberto: new Set(), limite: 100, preview: null, confirmarExcluir: '' };
+
+/* ===================== utilidades ===================== */
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
+const semAcento = s => String(s ?? '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+const hoje = () => { const d = new Date(); return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10); };
+const maisDias = n => { const d = new Date(); d.setDate(d.getDate() + n); return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10); };
+const dataBR = iso => iso ? iso.slice(8, 10) + '/' + iso.slice(5, 7) : '';
+function toast(msg) { const t = document.createElement('div'); t.className = 'toast'; t.textContent = msg; document.body.appendChild(t); setTimeout(() => t.remove(), 2600); }
+
+function paraE164(t) {
+  let d = String(t ?? '').replace(/\D/g, '').replace(/^0+/, '');
+  if (d.startsWith('55') && (d.length === 12 || d.length === 13)) return d;
+  if (d.length === 10 || d.length === 11) return '55' + d;
+  return '';
+}
+const ehCelular = e => e.length === 13 && e.startsWith('55') && e[4] === '9';
+const fmtTel = e => e.length === 13 ? `(${e.slice(2,4)}) ${e.slice(4,9)}-${e.slice(9)}` : e.length === 12 ? `(${e.slice(2,4)}) ${e.slice(4,8)}-${e.slice(8)}` : e;
+const idSeguro = s => { let x = String(s).replace(/[^A-Za-z0-9_\-.~:@+]/g, '-').slice(0, 150); return /^\.+$/.test(x) || !x ? 'x' + Date.now() : x; };
+
+/* ===================== score e mensagens ===================== */
+function pontuar(l) {
+  let p = 0; const m = [];
+  if (!l.site) { p += 25; m.push('Sem site'); }
+  if (l.celular) { p += 30; m.push('WhatsApp provável'); }
+  else if (l.e164) { p += 10; m.push('Telefone fixo'); }
+  else m.push('Sem telefone');
+  const a = l.avaliacoes;
+  if (a !== '' && a != null) {
+    if (a < 20) { p += 15; m.push(`Poucas avaliações (${a})`); }
+    else if (a >= 50) { p += 10; m.push(`Negócio estabelecido (${a} avaliações)`); }
+  }
+  if (l.nota && l.nota < 4.2) { p += 10; m.push(`Nota baixa (${l.nota})`); }
+  if (l.email) { p += 5; m.push('Tem e-mail'); }
+  l.score = Math.min(100, p);
+  l.temp = l.score >= 60 ? 'quente' : l.score >= 40 ? 'morno' : 'frio';
+  l.motivos = m;
+  return l;
+}
+
+function gancho(l) {
+  if (!l.site) return 'vocês ainda não têm um site aparecendo no perfil do Google';
+  if (l.avaliacoes !== '' && l.avaliacoes < 20) return 'o perfil tem poucas avaliações perto do potencial do negócio';
+  if (l.nota && l.nota < 4.2) return 'algumas avaliações estão puxando a nota do perfil para baixo';
+  return 'o perfil de vocês tem bastante potencial';
+}
+
+function mensagem(l) {
+  if (l.msg) return l.msg;
+  const c = S.cfg;
+  const modelos = (c.msgs && c.msgs.length ? c.msgs : PADRAO.msgs);
+  const tpl = modelos[Math.min(l.etapa || 0, modelos.length - 1)] || '';
+  const cat = semAcento(l.categoria) ? String(l.categoria).toLowerCase() : 'negócios';
+  const publico = c.publico || (/s$/.test(cat) ? cat : cat + 's');
+  const vars = { nome: l.nome, cidade: l.cidade || 'sua região', categoria: cat, publico, gancho: gancho(l),
+    meu_nome: c.nome || '[seu nome]', minha_empresa: c.empresa || '[sua empresa]', beneficio: c.beneficio || PADRAO.beneficio };
+  return tpl.replace(/\{(\w+)\}/g, (_, k) => vars[k] ?? '');
+}
+const linkWA = l => l.e164 ? `https://wa.me/${l.e164}?text=${encodeURIComponent(mensagem(l))}` : '';
+const cadencia = () => String(S.cfg.cadencia || '3,7').split(',').map(x => parseInt(x, 10)).filter(x => x > 0);
+
+/* ===================== banco ===================== */
+async function salvarLead(l) {
+  const { id, ...corpo } = l;
+  for (let t = 0; t < 2; t++) {
+    try { await S.db.collection('leads').doc(id).set(corpo); return true; }
+    catch (e) {
+      if (e && e.code === 'unavailable' && t === 0) { await new Promise(r => setTimeout(r, 400 + Math.random() * 600)); continue; }
+      if (e && e.code === 'quota_exceeded') toast('Limite de empresas atingido. Exclua algumas para adicionar novas.');
+      else toast('Não consegui salvar agora. Tente de novo.');
+      return false;
+    }
+  }
+}
+async function alterar(id, mudar) {
+  const atual = S.leads.get(id); if (!atual) return;
+  const l = structuredClone(atual); l.id = id;
+  mudar(l);
+  S.leads.set(id, l); render();
+  await salvarLead(l);
+}
+
+/* ===================== importação ===================== */
+const APELIDOS = {
+  nome: ['title','name','nome','empresa','nomefantasia','razaosocial'],
+  telefone: ['phone','phoneunformatted','telefone','phone1','fone','celular','whatsapp','internationalphonenumber','nationalphonenumber'],
+  site: ['website','site','domain','websiteuri'],
+  nota: ['totalscore','rating','nota'],
+  avaliacoes: ['reviewscount','reviews','avaliacoes','userratingcount','numerodeavaliacoes'],
+  categoria: ['categoryname','category','categories0','type','categoria','subtypes','segmento'],
+  cidade: ['city','cidade','municipio'],
+  maps: ['url','locationlink','googlemapsuri','googlemapsurl','maps','link'],
+  placeId: ['placeid','googleid','cid','placeid0'],
+  email: ['email','emails0','email1','emails'],
+  instagram: ['instagram','instagrams0','instagram1'],
+  fechado: ['permanentlyclosed','temporarilyclosed','businessstatus','status'],
+};
+const normCab = h => semAcento(h).replace(/[^a-z0-9]/g, '');
+
+function parseCSV(txt) {
+  txt = txt.replace(/^﻿/, '');
+  const prim = txt.split(/\r?\n/)[0] || '';
+  const sep = ['\t', ';', ','].map(c => [c, prim.split(c).length]).sort((a, b) => b[1] - a[1])[0][0];
+  const linhas = []; let lin = [], campo = '', aspas = false;
+  for (let i = 0; i < txt.length; i++) {
+    const ch = txt[i];
+    if (aspas) {
+      if (ch === '"') { if (txt[i + 1] === '"') { campo += '"'; i++; } else aspas = false; }
+      else campo += ch;
+    } else if (ch === '"') aspas = true;
+    else if (ch === sep) { lin.push(campo); campo = ''; }
+    else if (ch === '\n' || ch === '\r') { if (ch === '\r' && txt[i + 1] === '\n') i++; lin.push(campo); linhas.push(lin); lin = []; campo = ''; }
+    else campo += ch;
+  }
+  if (campo || lin.length) { lin.push(campo); linhas.push(lin); }
+  const cab = linhas.shift() || [];
+  return linhas.filter(r => r.some(v => String(v).trim())).map(r => Object.fromEntries(cab.map((h, i) => [h, r[i] ?? ''])));
+}
+function achatar(o) {
+  const out = {};
+  for (const [k, v] of Object.entries(o || {})) {
+    if (Array.isArray(v)) { if (v.length && typeof v[0] !== 'object') out[k + '0'] = v[0]; }
+    else if (v && typeof v === 'object') { for (const [k2, v2] of Object.entries(v)) if (typeof v2 !== 'object') out[k + k2] = v2; }
+    else out[k] = v;
+  }
+  return out;
+}
+
+function deLinha(obj) {
+  const idx = {};
+  for (const [k, v] of Object.entries(obj)) idx[normCab(k)] = v;
+  const g = campo => { for (const a of APELIDOS[campo]) { const v = idx[a]; if (v !== undefined && String(v).trim() !== '') return String(v).trim(); } return ''; };
+  const nome = g('nome'); if (!nome) return null;
+  const tel = g('telefone'); const e164 = paraE164(tel.split(/[;,/]/)[0]);
+  const fechadoTxt = g('fechado').toUpperCase();
+  const nota = g('nota') ? Number(g('nota').replace(',', '.')) || '' : '';
+  const aval = g('avaliacoes') !== '' ? Number(String(g('avaliacoes')).replace(/\D/g, '')) || 0 : '';
+  const cidade = g('cidade');
+  const site = /^https?:\/\/(www\.)?(google\.|goo\.gl|maps\.)/i.test(g('site')) ? '' : g('site');
+  const l = {
+    nome, categoria: g('categoria').split(',')[0].trim(), cidade, telefone: tel, e164, celular: ehCelular(e164),
+    site, nota, avaliacoes: aval, email: g('email').split(/[,;\s]/)[0], instagram: g('instagram'),
+    maps: g('maps') || 'https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(`${nome} ${cidade}`),
+    fechado: fechadoTxt === 'TRUE' || fechadoTxt === 'VERDADEIRO' || /CLOSED/.test(fechadoTxt),
+    placeId: g('placeId'),
+  };
+  l.id = idSeguro(l.placeId ? 'g-' + l.placeId : 'm-' + semAcento(nome).replace(/\s+/g, '') + '-' + e164);
+  return l;
+}
+
+function prepararImportacao(linhas, origem) {
+  const vistos = new Set([...S.leads.values()].map(l => semAcento(l.nome) + '|' + l.e164));
+  const r = { total: 0, novos: [], comSite: 0, fechados: 0, repetidos: 0, semNome: 0, origem };
+  for (const bruto of linhas) {
+    r.total++;
+    const l = deLinha(achatar(bruto));
+    if (!l) { r.semNome++; continue; }
+    if (l.fechado) { r.fechados++; continue; }
+    if (S.cfg.soSemSite && l.site) { r.comSite++; continue; }
+    const chave = semAcento(l.nome) + '|' + l.e164;
+    if (S.leads.has(l.id) || vistos.has(chave)) { r.repetidos++; continue; }
+    vistos.add(chave);
+    r.novos.push(l);
+  }
+  S.preview = r; render();
+}
+
+async function lerArquivo(arq) {
+  try {
+    const nome = arq.name.toLowerCase();
+    let linhas;
+    if (/\.(xlsx|xls)$/.test(nome)) {
+      if (!window.XLSX) throw new Error('não consegui abrir arquivos Excel aqui; exporte como CSV');
+      const wb = XLSX.read(await arq.arrayBuffer(), { type: 'array' });
+      linhas = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { defval: '' });
+    } else if (/\.json$/.test(nome)) {
+      const j = JSON.parse(await arq.text()); linhas = Array.isArray(j) ? j : (j.items || j.data || []);
+    } else linhas = parseCSV(await arq.text());
+    prepararImportacao(linhas, arq.name);
+  } catch (e) { S.preview = { erro: 'Não consegui ler esse arquivo: ' + (e.message || e) }; render(); }
+}
+
+async function confirmarImportacao() {
+  const r = S.preview; if (!r || !r.novos) return;
+  const agora = new Date().toISOString();
+  const lista = r.novos.map(l => { const { fechado, ...x } = l; return pontuar({ ...x, status: 'novo', etapa: 0, followup: '', notas: '', msg: '', hist: [], criado: agora, fonte: r.origem === 'Manual' ? 'Manual' : 'Importado' }); });
+  lista.forEach(l => { if (l.temp === 'quente') l.status = 'qualificado'; S.leads.set(l.id, l); });
+  S.preview = { ok: `${lista.length} empresas adicionadas.` }; render();
+  let i = 0;
+  const trabalhador = async () => { while (i < lista.length) { await salvarLead(lista[i++]); } };
+  await Promise.all([trabalhador(), trabalhador(), trabalhador(), trabalhador()]);
+}
+
+/* ===================== ações ===================== */
+function enviei(id) {
+  alterar(id, l => {
+    const cad = cadencia(); const etapa = l.etapa || 0;
+    if (['novo', 'qualificado'].includes(l.status)) l.status = 'contatado';
+    l.followup = cad[etapa] ? maisDias(cad[etapa]) : '';
+    l.hist = [...(l.hist || []), { d: hoje(), t: `Mensagem ${etapa + 1} enviada` }].slice(-30);
+    l.etapa = etapa + 1; l.msg = '';
+  });
+  toast('Envio registrado. Próximo contato agendado.');
+}
+function mudarStatus(id, st) {
+  alterar(id, l => {
+    l.hist = [...(l.hist || []), { d: hoje(), t: `${STATUS_ROTULO[l.status]} → ${STATUS_ROTULO[st]}` }].slice(-30);
+    l.status = st; if (['fechado', 'perdido', 'nao_contatar'].includes(st)) l.followup = '';
+  });
+}
+async function excluir(id) {
+  S.leads.delete(id); S.confirmarExcluir = ''; render();
+  try { await S.db.collection('leads').doc(id).delete(); } catch { toast('Não consegui excluir agora.'); }
+}
+async function reescreverIA(id) {
+  const l = S.leads.get(id); if (!l || !S.sample) return;
+  const btn = document.querySelector(`[data-ia="${id}"]`); if (btn) { btn.disabled = true; btn.textContent = 'Escrevendo...'; }
+  const c = S.cfg;
+  const prompt = `Escreva UMA mensagem de WhatsApp em português do Brasil para prospectar este negócio local.
+Quem envia: ${c.nome || '[seu nome]'}, da ${c.empresa || '[sua empresa]'}. O que oferece: ${c.beneficio}.
+Etapa: ${l.etapa ? 'follow-up nº ' + l.etapa + ' (a pessoa ainda não respondeu)' : 'primeiro contato'}.
+Dados do negócio (use só estes fatos, não invente nada): nome "${l.nome}", categoria "${l.categoria}", cidade "${l.cidade}", nota no Google ${l.nota || 'desconhecida'}, ${l.avaliacoes === '' ? 'avaliações desconhecidas' : l.avaliacoes + ' avaliações'}, ${l.site ? 'tem site' : 'não tem site'}.
+Regras: tom humano e educado, sem exagero, sem prometer resultado, no máximo 450 caracteres, no máximo 1 emoji, termine com uma pergunta simples. Responda só com o texto da mensagem.`;
+  try {
+    const r = await S.sample(prompt, { modelTier: 'quick', cache: false });
+    const texto = (r.text || '').trim().replace(/^"|"$/g, '');
+    if (texto) alterar(id, x => { x.msg = texto; });
+  } catch (e) {
+    toast(e && e.code === 'rate_limited' ? 'Muitos pedidos seguidos. Espere um pouco.' : 'A IA não está disponível agora.');
+    render();
+  }
+}
+async function exportar() {
+  const cols = ['score','temp','status','nome','categoria','cidade','telefone','nota','avaliacoes','email','instagram','followup','etapa','notas','maps'];
+  const linhas = [cols.join(';')].concat([...S.leads.values()].sort((a, b) => b.score - a.score)
+    .map(l => cols.map(c => '"' + String(l[c] ?? '').replace(/"/g, '""') + '"').join(';')));
+  if (!S.downloads) return toast('Exportar não está disponível nesta visualização.');
+  try { await S.downloads.save({ filename: `leads-${hoje()}.csv`, data: '﻿' + linhas.join('\n') }); toast('Planilha salva.'); }
+  catch (e) { if (e && e.code !== 'declined') toast('Não consegui exportar agora.'); }
+}
+async function carregarExemplos() {
+  const ex = [
+    { nome: 'Exemplo · Studio Bela Pele', categoria: 'Clínica de estética', cidade: 'Campinas', telefone: '(19) 99812-0000', nota: 4.1, avaliacoes: 12 },
+    { nome: 'Exemplo · Oficina do Zé', categoria: 'Oficina mecânica', cidade: 'Campinas', telefone: '(19) 99733-0000', nota: 4.7, avaliacoes: 86 },
+    { nome: 'Exemplo · Padaria Pão Nosso', categoria: 'Padaria', cidade: 'Valinhos', telefone: '(19) 3871-0000', nota: 4.5, avaliacoes: 34 },
+  ];
+  prepararImportacao(ex, 'Exemplos');
+  await confirmarImportacao();
+}
+async function salvarAjustes(form) {
+  const f = new FormData(form);
+  S.cfg = { ...S.cfg, nome: f.get('nome').trim(), empresa: f.get('empresa').trim(), publico: f.get('publico').trim(),
+    beneficio: f.get('beneficio').trim() || PADRAO.beneficio, cadencia: f.get('cadencia').trim() || '3, 7',
+    soSemSite: f.get('soSemSite') === 'on', msgs: [f.get('m0'), f.get('m1'), f.get('m2')].map(s => String(s || '').trim()).filter(Boolean) };
+  render();
+  try { await S.db.doc('config/perfil').set(S.cfg); toast('Ajustes salvos.'); }
+  catch { toast('Não consegui salvar os ajustes agora.'); }
+}
+
+/* ===================== telas ===================== */
+const ICON_WA = '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2a10 10 0 0 0-8.6 15.1L2 22l5-1.3A10 10 0 1 0 12 2zm0 18.2a8.2 8.2 0 0 1-4.2-1.2l-.3-.2-3 .8.8-2.9-.2-.3A8.2 8.2 0 1 1 12 20.2zm4.5-6.1c-.2-.1-1.5-.7-1.7-.8-.2-.1-.4-.1-.6.1l-.8 1c-.1.2-.3.2-.5.1a6.7 6.7 0 0 1-3.3-2.9c-.3-.4.2-.4.6-1.3.1-.2 0-.3 0-.4l-.8-1.8c-.2-.5-.4-.4-.6-.4h-.5a1 1 0 0 0-.7.3 3 3 0 0 0-.9 2.2 5.2 5.2 0 0 0 1.1 2.7 11.9 11.9 0 0 0 4.6 4c1.7.7 2.4.8 3.2.6.5-.1 1.5-.6 1.7-1.2.2-.6.2-1.1.2-1.2-.1-.1-.3-.2-.5-.3z"/></svg>';
+
+function cartao(l) {
+  const aberto = S.aberto.has(l.id);
+  const vencido = l.followup && l.followup <= hoje() && ATIVOS.includes(l.status);
+  const wa = linkWA(l);
+  return `<article class="lead">
+    <div class="score t-${l.temp}" title="Pontuação de 0 a 100"><span class="num">${l.score}</span><small>${l.temp}</small></div>
+    <div class="lead-body">
+      <div class="row spread"><div class="lead-name">${esc(l.nome)}</div>
+        <div class="chips"><span class="chip st">${STATUS_ROTULO[l.status] || l.status}</span>
+        ${l.followup && ATIVOS.includes(l.status) ? `<span class="chip ${vencido ? 'due' : ''}">${vencido ? 'Retornar hoje' : 'Retorno ' + dataBR(l.followup)}</span>` : ''}
+        ${l.fonte === 'Exemplos' || /^Exemplo ·/.test(l.nome) ? '<span class="chip ex">Exemplo</span>' : ''}</div></div>
+      <div class="meta">
+        ${l.categoria ? `<span>${esc(l.categoria)}</span>` : ''}${l.cidade ? `<span>${esc(l.cidade)}</span>` : ''}
+        ${l.nota ? `<span>★ <span class="num">${l.nota}</span>${l.avaliacoes !== '' ? ` · <span class="num">${l.avaliacoes}</span> avaliações` : ''}</span>` : ''}
+        ${l.e164 ? `<span class="num">${fmtTel(l.e164)}</span>` : l.telefone ? `<span>${esc(l.telefone)}</span>` : ''}
+      </div>
+      <div class="chips">${(l.motivos || []).map(m => `<span class="chip">${esc(m)}</span>`).join('')}</div>
+      <div class="actions">
+        ${wa ? `<a class="btn wa" href="${wa}" target="_blank" rel="noopener">${ICON_WA}${l.celular ? 'WhatsApp' : 'WhatsApp (fixo)'}</a>` : ''}
+        ${l.status !== 'nao_contatar' ? `<button class="btn" data-act="enviei" data-id="${l.id}">✓ Enviei a mensagem ${(l.etapa || 0) + 1}</button>` : ''}
+        <select aria-label="Etapa do funil" data-act="status" data-id="${l.id}">${STATUS.map(s => `<option value="${s}" ${s === l.status ? 'selected' : ''}>${STATUS_ROTULO[s]}</option>`).join('')}</select>
+        <button class="btn ghost" data-act="toggle" data-id="${l.id}" aria-expanded="${aberto}">${aberto ? 'Fechar' : 'Mensagem e notas'}</button>
+      </div>
+      ${aberto ? `<div class="details">
+        <label class="f" for="msg-${l.id}">Mensagem ${(l.etapa || 0) + 1} (edite à vontade antes de enviar)
+          <textarea id="msg-${l.id}" rows="5" data-act="msg" data-id="${l.id}">${esc(mensagem(l))}</textarea></label>
+        <div class="row">
+          ${S.sample ? `<button class="btn" data-ia="${l.id}" data-act="ia" data-id="${l.id}">✨ Reescrever com IA</button>` : ''}
+          ${l.msg ? `<button class="btn ghost" data-act="padrao" data-id="${l.id}">Voltar ao modelo</button>` : ''}
+          <a class="btn ghost" href="${esc(l.maps)}" target="_blank" rel="noopener">Ver no Google Maps</a>
+          ${l.instagram ? `<a class="btn ghost" href="${esc(/^https?:/.test(l.instagram) ? l.instagram : 'https://instagram.com/' + l.instagram.replace(/^@/, ''))}" target="_blank" rel="noopener">Instagram</a>` : ''}
+        </div>
+        <div class="grid2">
+          <label class="f" for="fu-${l.id}">Próximo contato<input type="date" id="fu-${l.id}" value="${l.followup || ''}" data-act="followup" data-id="${l.id}"></label>
+          <label class="f" for="nt-${l.id}">Notas<textarea id="nt-${l.id}" rows="2" data-act="notas" data-id="${l.id}" placeholder="Ex.: falar com a Ana à tarde">${esc(l.notas)}</textarea></label>
+        </div>
+        ${l.email ? `<div class="note">E-mail: <span class="num">${esc(l.email)}</span></div>` : ''}
+        ${(l.hist || []).length ? `<div class="hist">${l.hist.slice().reverse().map(h => `<span>${dataBR(h.d)} · ${esc(h.t)}</span>`).join('')}</div>` : ''}
+        <div class="row">${S.confirmarExcluir === l.id
+          ? `<button class="btn danger" data-act="excluir-sim" data-id="${l.id}">Confirmar exclusão</button><button class="btn ghost" data-act="excluir-nao">Cancelar</button>`
+          : `<button class="btn ghost danger" data-act="excluir" data-id="${l.id}">Excluir empresa</button>`}</div>
+      </div>` : ''}
+    </div>
+  </article>`;
+}
+
+function estadoCarregando() {
+  if (S.erro) return `<div class="panel"><div class="notice err">${esc(S.erro)}</div></div>`;
+  if (!S.loaded) return `<div class="panel empty"><strong>Carregando suas empresas...</strong>${S.slow ? '<span>O servidor está demorando para responder. Seus dados aparecem assim que ele voltar.</span>' : ''}</div>`;
+  return '';
+}
+
+function telaHoje() {
+  const c = estadoCarregando(); if (c) return c;
+  const leads = [...S.leads.values()];
+  const retornos = leads.filter(l => l.followup && l.followup <= hoje() && ATIVOS.includes(l.status)).sort((a, b) => a.followup.localeCompare(b.followup));
+  const novos = leads.filter(l => ['novo', 'qualificado'].includes(l.status)).sort((a, b) => b.score - a.score).slice(0, 10);
+  const semPerfil = !S.cfg.nome || !S.cfg.empresa;
+  if (!leads.length) return `
+    <div><h1>Bem-vindo ao Prospec</h1><p class="sub">Encontre empresas sem site no Google Maps, mande mensagens prontas pelo WhatsApp e acompanhe cada conversa até fechar.</p></div>
+    <div class="panel"><h2>Comece em 3 passos</h2>
+      <ol class="steps">
+        <li><a href="#ajustes">Preencha seu nome e sua empresa</a>, que aparecem nas mensagens.</li>
+        <li><a href="#adicionar">Adicione empresas</a> com a lista do Google Maps (arquivo do Apify) ou uma a uma.</li>
+        <li>Volte aqui: o sistema mostra quem abordar hoje, com a mensagem pronta para o WhatsApp.</li>
+      </ol>
+      <div class="row"><a class="btn primary" href="#adicionar">Adicionar empresas</a><button class="btn" data-act="exemplos">Ver com 3 empresas de exemplo</button></div>
+    </div>`;
+  return `
+    <div><h1>Hoje</h1><p class="sub">${retornos.length ? `${retornos.length} retorno(s) para fazer` : 'Nenhum retorno pendente'} e ${novos.length} empresa(s) nova(s) prontas para abordar.</p></div>
+    ${semPerfil ? `<div class="notice">Suas mensagens ainda saem com "[seu nome]". <a href="#ajustes">Preencha seus dados em Ajustes</a>.</div>` : ''}
+    ${retornos.length ? `<h2>Retornos de hoje</h2>${retornos.map(cartao).join('')}` : ''}
+    <h2>Melhores empresas para abordar</h2>
+    ${novos.length ? novos.map(cartao).join('') : `<div class="panel empty"><strong>Todas as empresas já foram contatadas.</strong><a class="btn primary" href="#adicionar">Adicionar mais empresas</a></div>`}`;
+}
+
+function telaLeads() {
+  const c = estadoCarregando(); if (c) return c;
+  const f = S.filtro; const q = semAcento(f.q);
+  let lista = [...S.leads.values()].filter(l =>
+    (!q || semAcento(l.nome + ' ' + l.categoria + ' ' + l.cidade + ' ' + l.e164).includes(q)) &&
+    (f.status === 'todos' || (f.status === 'abertos' ? !['fechado', 'perdido', 'nao_contatar'].includes(l.status) : l.status === f.status)) &&
+    (!f.temp || l.temp === f.temp)).sort((a, b) => b.score - a.score || a.nome.localeCompare(b.nome));
+  const total = lista.length; lista = lista.slice(0, S.limite);
+  return `
+    <div class="row spread"><div><h1>Leads</h1><p class="sub">${S.leads.size} empresas no total, as melhores primeiro.</p></div>
+      <div class="row"><button class="btn" data-act="exportar">Baixar planilha (CSV)</button><a class="btn primary" href="#adicionar">Adicionar empresas</a></div></div>
+    <div class="filters">
+      <label class="f grow" for="f-q">Buscar<input type="search" id="f-q" value="${esc(f.q)}" placeholder="Nome, categoria, cidade ou telefone" data-act="fq"></label>
+      <label class="f" for="f-st">Etapa<select id="f-st" data-act="fst">
+        <option value="abertos" ${f.status === 'abertos' ? 'selected' : ''}>Em aberto</option><option value="todos" ${f.status === 'todos' ? 'selected' : ''}>Todas</option>
+        ${STATUS.map(s => `<option value="${s}" ${f.status === s ? 'selected' : ''}>${STATUS_ROTULO[s]}</option>`).join('')}</select></label>
+      <label class="f" for="f-t">Temperatura<select id="f-t" data-act="ft"><option value="">Todas</option>
+        ${['quente', 'morno', 'frio'].map(t => `<option value="${t}" ${f.temp === t ? 'selected' : ''}>${t[0].toUpperCase() + t.slice(1)}</option>`).join('')}</select></label>
+    </div>
+    ${total ? lista.map(cartao).join('') : `<div class="panel empty"><strong>Nenhuma empresa com esses filtros.</strong><span>Mude a busca ou a etapa, ou adicione empresas.</span></div>`}
+    ${total > lista.length ? `<button class="btn" data-act="mais">Mostrar mais (${total - lista.length} restantes)</button>` : ''}`;
+}
+
+function telaAdicionar() {
+  const p = S.preview;
+  let resumo = '';
+  if (p && p.erro) resumo = `<div class="notice err">${esc(p.erro)}</div>`;
+  else if (p && p.ok) resumo = `<div class="notice">${esc(p.ok)} <a href="#hoje">Ver quem abordar hoje</a>.</div>`;
+  else if (p) resumo = `<div class="panel"><h2>Conferência da lista</h2>
+      <div class="stats">
+        <div class="stat"><b>${p.total}</b><span>empresas no arquivo</span></div>
+        <div class="stat"><b>${p.novos.length}</b><span>novas para adicionar</span></div>
+        <div class="stat"><b>${p.comSite}</b><span>ignoradas por ter site</span></div>
+        <div class="stat"><b>${p.repetidos + p.fechados + p.semNome}</b><span>repetidas, fechadas ou sem nome</span></div>
+      </div>
+      <div class="row"><button class="btn primary" data-act="confirmar" ${p.novos.length ? '' : 'disabled'}>Adicionar ${p.novos.length} empresas</button><button class="btn ghost" data-act="cancelar">Cancelar</button></div></div>`;
+  return `
+    <div><h1>Adicionar empresas</h1><p class="sub">${S.cfg.soSemSite ? 'Só entram empresas <b>sem site</b>. As que têm site são ignoradas automaticamente.' : 'Entram empresas com e sem site.'} Empresas repetidas e fechadas também ficam de fora.</p></div>
+    ${resumo}
+    <div class="panel"><h2>Lista do Google Maps (recomendado)</h2>
+      <ol class="steps">
+        <li>Abra o <a href="https://apify.com/compass/crawler-google-places" target="_blank" rel="noopener">Google Maps Scraper no Apify</a> e clique em <b>Try for free</b>. Dá para entrar com sua conta Google, sem cartão.</li>
+        <li>Em <b>Search term(s)</b>, escreva o tipo de empresa (ex.: <i>salão de beleza</i>). Em <b>Location</b>, a cidade (ex.: <i>Campinas, SP</i>). Em <b>Number of places</b>, coloque 100.</li>
+        <li>Clique em <b>Save &amp; Start</b> e espere terminar.</li>
+        <li>Clique em <b>Export</b>, escolha <b>CSV</b> ou <b>Excel</b> e baixe.</li>
+        <li>Arraste o arquivo para a caixa abaixo.</li>
+      </ol>
+      <div class="drop" id="drop">
+        <strong>Arraste o arquivo aqui</strong><span>CSV, Excel ou JSON exportado do Apify, Outscraper ou de qualquer planilha com cabeçalho</span>
+        <label class="btn primary" for="arq">Escolher arquivo</label><input type="file" id="arq" accept=".csv,.xlsx,.xls,.json,.txt" hidden>
+      </div>
+    </div>
+    <div class="panel"><h2>Adicionar uma empresa</h2>
+      <p class="note">Achou uma empresa sem site no app do Google Maps? Cadastre aqui.</p>
+      <form id="form-manual" class="grid2">
+        <label class="f" for="m-nome">Nome da empresa *<input type="text" id="m-nome" name="nome" required></label>
+        <label class="f" for="m-tel">WhatsApp ou telefone *<input type="text" id="m-tel" name="telefone" inputmode="tel" placeholder="(19) 99999-9999" required></label>
+        <label class="f" for="m-cat">Tipo de negócio<input type="text" id="m-cat" name="categoria" placeholder="Ex.: Barbearia"></label>
+        <label class="f" for="m-cid">Cidade<input type="text" id="m-cid" name="cidade"></label>
+        <label class="f" for="m-nota">Nota no Google<input type="number" id="m-nota" name="nota" step="0.1" min="1" max="5"></label>
+        <label class="f" for="m-av">Nº de avaliações<input type="number" id="m-av" name="avaliacoes" min="0"></label>
+        <div class="row"><button class="btn primary" type="submit">Adicionar</button></div>
+      </form>
+    </div>`;
+}
+
+function telaFunil() {
+  const c = estadoCarregando(); if (c) return c;
+  const leads = [...S.leads.values()];
+  const cont = Object.fromEntries(STATUS.map(s => [s, 0])); leads.forEach(l => { cont[l.status] = (cont[l.status] || 0) + 1; });
+  const contatados = leads.filter(l => (l.etapa || 0) > 0).length;
+  const resp = ['respondeu', 'reuniao', 'proposta', 'fechado'].reduce((a, s) => a + cont[s], 0);
+  const max = Math.max(1, ...Object.values(cont));
+  return `
+    <div><h1>Funil</h1><p class="sub">Como as conversas estão andando.</p></div>
+    <div class="stats">
+      <div class="stat"><b>${leads.length}</b><span>empresas</span></div>
+      <div class="stat"><b>${contatados}</b><span>contatadas</span></div>
+      <div class="stat"><b>${contatados ? Math.round(100 * resp / contatados) : 0}%</b><span>taxa de resposta</span></div>
+      <div class="stat"><b>${cont.fechado}</b><span>fechadas</span></div>
+    </div>
+    <div class="panel"><h2>Empresas por etapa</h2><div class="bars">
+      ${STATUS.map(s => `<div class="bar"><span>${STATUS_ROTULO[s]}</span><span class="track"><i style="width:${100 * cont[s] / max}%"></i></span><span class="num">${cont[s]}</span></div>`).join('')}
+    </div></div>`;
+}
+
+function telaAjustes() {
+  const c = S.cfg; const m = (c.msgs && c.msgs.length ? c.msgs : PADRAO.msgs);
+  return `
+    <div><h1>Ajustes</h1><p class="sub">Seus dados e os modelos de mensagem. Variáveis disponíveis: {nome}, {cidade}, {categoria}, {publico}, {gancho}, {meu_nome}, {minha_empresa}, {beneficio}.</p></div>
+    <form id="form-ajustes" class="panel">
+      <div class="grid2">
+        <label class="f" for="a-nome">Seu nome<input type="text" id="a-nome" name="nome" value="${esc(c.nome)}"></label>
+        <label class="f" for="a-emp">Sua empresa<input type="text" id="a-emp" name="empresa" value="${esc(c.empresa)}"></label>
+        <label class="f" for="a-pub">Público no plural (opcional)<input type="text" id="a-pub" name="publico" value="${esc(c.publico)}" placeholder="Ex.: salões de beleza"></label>
+        <label class="f" for="a-cad">Dias até cada retorno<input type="text" id="a-cad" name="cadencia" value="${esc(c.cadencia)}" placeholder="3, 7"></label>
+      </div>
+      <label class="f" for="a-ben">O que você oferece (complete: "Ajudo ... a ___")<input type="text" id="a-ben" name="beneficio" value="${esc(c.beneficio)}"></label>
+      <label class="row" for="a-sem"><input type="checkbox" id="a-sem" name="soSemSite" ${c.soSemSite ? 'checked' : ''}> Adicionar só empresas sem site</label>
+      <label class="f" for="a-m0">Mensagem 1 · primeiro contato<textarea id="a-m0" name="m0" rows="4">${esc(m[0] || '')}</textarea></label>
+      <label class="f" for="a-m1">Mensagem 2 · primeiro retorno<textarea id="a-m1" name="m1" rows="3">${esc(m[1] || '')}</textarea></label>
+      <label class="f" for="a-m2">Mensagem 3 · último retorno<textarea id="a-m2" name="m2" rows="3">${esc(m[2] || '')}</textarea></label>
+      <div class="row"><button class="btn primary" type="submit">Salvar ajustes</button></div>
+    </form>`;
+}
+
+function render() {
+  const telas = { hoje: telaHoje, leads: telaLeads, adicionar: telaAdicionar, funil: telaFunil, ajustes: telaAjustes };
+  const foco = document.activeElement && document.activeElement.id; const pos = foco && document.activeElement.selectionStart;
+  $('#app').innerHTML = (telas[S.view] || telaHoje)();
+  document.querySelectorAll('#tabs a').forEach(a => a.dataset.view === S.view ? a.setAttribute('aria-current', 'page') : a.removeAttribute('aria-current'));
+  const vencidos = [...S.leads.values()].filter(l => l.followup && l.followup <= hoje() && ATIVOS.includes(l.status)).length;
+  $('#c-hoje').textContent = vencidos; $('#c-leads').textContent = S.leads.size;
+  if (foco) { const el = document.getElementById(foco); if (el) { el.focus(); try { if (pos != null) el.setSelectionRange(pos, pos); } catch {} } }
+  ligarArquivo();
+}
+
+/* ===================== eventos ===================== */
+function ligarArquivo() {
+  const drop = $('#drop'), arq = $('#arq'); if (!drop) return;
+  arq.onchange = () => arq.files[0] && lerArquivo(arq.files[0]);
+  drop.ondragover = e => { e.preventDefault(); drop.classList.add('over'); };
+  drop.ondragleave = () => drop.classList.remove('over');
+  drop.ondrop = e => { e.preventDefault(); drop.classList.remove('over'); if (e.dataTransfer.files[0]) lerArquivo(e.dataTransfer.files[0]); };
+}
+document.addEventListener('click', e => {
+  const b = e.target.closest('[data-act]'); if (!b || b.tagName === 'SELECT' || b.tagName === 'TEXTAREA' || b.tagName === 'INPUT') return;
+  const id = b.dataset.id; const act = b.dataset.act;
+  if (act === 'enviei') enviei(id);
+  else if (act === 'toggle') { S.aberto.has(id) ? S.aberto.delete(id) : S.aberto.add(id); render(); }
+  else if (act === 'ia') reescreverIA(id);
+  else if (act === 'padrao') alterar(id, l => { l.msg = ''; });
+  else if (act === 'excluir') { S.confirmarExcluir = id; render(); }
+  else if (act === 'excluir-sim') excluir(id);
+  else if (act === 'excluir-nao') { S.confirmarExcluir = ''; render(); }
+  else if (act === 'confirmar') confirmarImportacao();
+  else if (act === 'cancelar') { S.preview = null; render(); }
+  else if (act === 'exportar') exportar();
+  else if (act === 'exemplos') carregarExemplos();
+  else if (act === 'mais') { S.limite += 100; render(); }
+});
+let tFiltro, tTexto = {};
+document.addEventListener('input', e => {
+  const el = e.target; const act = el.dataset.act; const id = el.dataset.id;
+  if (act === 'fq') { clearTimeout(tFiltro); tFiltro = setTimeout(() => { S.filtro.q = el.value; render(); }, 250); }
+  else if (act === 'msg' || act === 'notas') {
+    const l = S.leads.get(id); if (!l) return;
+    if (act === 'msg') l.msg = el.value === mensagem({ ...l, msg: '' }) ? '' : el.value; else l.notas = el.value;
+    clearTimeout(tTexto[id]); tTexto[id] = setTimeout(() => alterar(id, x => { x.msg = l.msg; x.notas = l.notas; }), 800);
+    const a = el.closest('.lead').querySelector('a.btn.wa'); if (a) a.href = linkWA(l);
+  }
+});
+document.addEventListener('change', e => {
+  const el = e.target; const act = el.dataset.act; const id = el.dataset.id;
+  if (act === 'status') mudarStatus(id, el.value);
+  else if (act === 'followup') alterar(id, l => { l.followup = el.value; });
+  else if (act === 'fst') { S.filtro.status = el.value; render(); }
+  else if (act === 'ft') { S.filtro.temp = el.value; render(); }
+});
+document.addEventListener('submit', e => {
+  e.preventDefault();
+  if (e.target.id === 'form-ajustes') salvarAjustes(e.target);
+  if (e.target.id === 'form-manual') {
+    const f = Object.fromEntries(new FormData(e.target));
+    if (!paraE164(f.telefone)) { toast('Telefone inválido. Use DDD + número.'); return; }
+    prepararImportacao([{ nome: f.nome, telefone: f.telefone, categoria: f.categoria, cidade: f.cidade, nota: f.nota, avaliacoes: f.avaliacoes }], 'Manual');
+    if (S.preview.novos.length) { confirmarImportacao(); e.target.reset(); toast('Empresa adicionada.'); }
+    else { toast(S.preview.repetidos ? 'Essa empresa já está na lista.' : 'Não consegui adicionar.'); S.preview = null; render(); }
+  }
+});
+function rota() { const v = location.hash.slice(1); S.view = ['hoje', 'leads', 'adicionar', 'funil', 'ajustes'].includes(v) ? v : 'hoje'; if (S.view !== 'adicionar' && S.preview && (S.preview.ok || S.preview.erro)) S.preview = null; render(); window.scrollTo(0, 0); }
+window.addEventListener('hashchange', rota);
+
+/* ===================== início ===================== */
+rota();
+(async () => {
+  const timer = setTimeout(() => { S.slow = true; render(); }, 10000);
+  const db = window.claude ? await claude.use('db') : null;
+  if (!db) { clearTimeout(timer); S.erro = 'Não consegui abrir o banco de dados. Abra este sistema pelo claude.ai com sua conta conectada.'; render(); return; }
+  S.db = db;
+  db.collection('leads').onSnapshot(snap => {
+    const m = new Map(); snap.docs.forEach(d => m.set(d.id, { id: d.id, ...structuredClone(d.data()) }));
+    S.leads = m; if (!snap.metadata.fromCache) { S.loaded = true; S.slow = false; clearTimeout(timer); } else if (m.size) S.loaded = true;
+    if (!document.activeElement || !['TEXTAREA', 'INPUT'].includes(document.activeElement.tagName)) render();
+  }, err => { clearTimeout(timer); S.erro = 'Não consegui carregar suas empresas agora. Recarregue a página em alguns minutos.'; render(); });
+  db.doc('config/perfil').onSnapshot(d => { if (d.exists) { S.cfg = { ...PADRAO, ...structuredClone(d.data()) }; if (S.view !== 'ajustes') render(); } }, () => {});
+  claude.use('sample').then(s => { S.sample = s; render(); });
+  claude.use('downloads').then(d => { S.downloads = d; });
+})();
+</script>

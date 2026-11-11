@@ -131,16 +131,22 @@ textarea { resize: vertical; line-height: 1.45; }
 const STATUS = ['novo','qualificado','contatado','respondeu','reuniao','proposta','fechado','perdido','nao_contatar'];
 const STATUS_ROTULO = { novo:'Novo', qualificado:'Qualificado', contatado:'Contatado', respondeu:'Respondeu', reuniao:'Reunião', proposta:'Proposta', fechado:'Fechado', perdido:'Perdido', nao_contatar:'Não contatar' };
 const ATIVOS = ['contatado','respondeu','reuniao','proposta'];
-const PADRAO = {
-  nome: '', empresa: '', publico: '',
-  beneficio: 'ter um site profissional e aparecer para mais clientes no Google',
-  cadencia: '3, 7', soSemSite: true,
-  msgs: [
-    'Oi, tudo bem? Aqui é {meu_nome}, da {minha_empresa}. Encontrei o perfil "{nome}" no Google Maps e reparei que {gancho}. Ajudo {publico} de {cidade} a {beneficio}. Posso te mandar uma ideia rápida de como faríamos isso para vocês?',
-    'Oi! Passando de novo por aqui 🙂 Separei 2 sugestões práticas para o "{nome}" atrair mais clientes pelo Google. Quer que eu te mande por aqui mesmo?',
-    'Último contato da minha parte, prometo! Se fizer sentido conversar sobre {beneficio}, é só me responder. Se não for o momento, sem problema. Muito sucesso para vocês!',
-  ],
+const ULTIMA = 'Oi! Para não incomodar, essa é minha última mensagem 🙂 Se um dia quiser conversar sobre {servico}, é só me chamar aqui. Sucesso para vocês!';
+const ESTILOS = {
+  direta: { rotulo: 'Direta: já fala do site', msgs: [
+    '{saudacao}, tudo bem? Encontrei o perfil "{nome}" no Google Maps. {elogio}Reparei que vocês ainda não têm um site, e hoje muita gente pesquisa no Google antes de decidir onde ir. Eu trabalho com {servico} para negócios {da_cidade}. Posso te mandar um modelo de como ficaria o de vocês? Sem compromisso.',
+    'Oi, tudo bem? Só passando para saber se você viu minha mensagem. Se fizer sentido, te mostro em 5 minutos como ficaria para vocês, sem custo nenhum.',
+    ULTIMA ] },
+  curta: { rotulo: 'Curta: pergunta pelo responsável primeiro', msgs: [
+    '{saudacao}, tudo bem? Consigo falar com o responsável por "{nome}"?',
+    'Oi! Te chamei porque vi no Google Maps que vocês ainda não têm site, e eu trabalho com {servico} para negócios {da_cidade}. Posso te mostrar uma ideia rápida?',
+    ULTIMA ] },
+  consultiva: { rotulo: 'Consultiva: mostra o problema e oferece ajuda', msgs: [
+    '{saudacao}, tudo bem? {apresentacao}Pesquisei {categoria} {em_cidade} no Google Maps e encontrei vocês ("{nome}"). {elogio}Só senti falta de um site: quem vê o perfil e quer saber mais não encontra, e acaba indo para quem tem. Separei algumas ideias para vocês. Posso te mandar?',
+    'Oi, tudo bem? Separei 3 pontos simples que ajudariam vocês a receber mais clientes pelo Google. Quer que eu mande por aqui?',
+    ULTIMA ] },
 };
+const PADRAO = { nome: '', empresa: '', servico: 'criação de sites', cadencia: '3, 7', soSemSite: true, estilo: 'direta', personalizado: false, msgs: [] };
 const S = { db: null, sample: null, downloads: null, leads: new Map(), cfg: { ...PADRAO }, loaded: false, slow: false, erro: '',
   view: 'hoje', filtro: { q: '', status: 'abertos', temp: '' }, aberto: new Set(), limite: 100, preview: null, confirmarExcluir: '' };
 
@@ -238,16 +244,26 @@ function gancho(l) {
   return 'o perfil de vocês tem bastante potencial';
 }
 
+const modelosAtuais = () => S.cfg.personalizado && S.cfg.msgs && S.cfg.msgs.length ? S.cfg.msgs : (ESTILOS[S.cfg.estilo] || ESTILOS.direta).msgs;
+function saudacao() { const h = new Date().getHours(); return h < 12 ? 'Bom dia' : h < 18 ? 'Boa tarde' : 'Boa noite'; }
+function preencherModelo(tpl, l) {
+  const c = S.cfg;
+  const nota = Number(l.nota) || 0, av = Number(l.avaliacoes) || 0;
+  const elogio = nota >= 4.5 && av >= 10 ? `Vi que vocês têm nota ${String(nota).replace('.', ',')} com ${av} avaliações, parabéns pelo trabalho! ` : '';
+  const vars = {
+    saudacao: saudacao(), nome: l.nome, elogio,
+    categoria: String(l.categoria || 'empresas').toLowerCase(),
+    cidade: l.cidade || 'sua região', em_cidade: l.cidade ? `em ${l.cidade}` : 'na região', da_cidade: l.cidade ? `aqui de ${l.cidade}` : 'da região',
+    servico: c.servico || PADRAO.servico, meu_nome: c.nome || '', minha_empresa: c.empresa || '',
+    apresentacao: c.nome ? `Meu nome é ${c.nome}${c.empresa ? ', da ' + c.empresa : ''}. ` : '',
+    gancho: gancho(l),
+  };
+  return tpl.replace(/\{(\w+)\}/g, (_, k) => vars[k] ?? '').replace(/ {2,}/g, ' ').replace(/ ([.,!?])/g, '$1').trim();
+}
 function mensagem(l) {
   if (l.msg) return l.msg;
-  const c = S.cfg;
-  const modelos = (c.msgs && c.msgs.length ? c.msgs : PADRAO.msgs);
-  const tpl = modelos[Math.min(l.etapa || 0, modelos.length - 1)] || '';
-  const cat = semAcento(l.categoria) ? String(l.categoria).toLowerCase() : 'negócios';
-  const publico = c.publico || (/s$/.test(cat) ? cat : cat + 's');
-  const vars = { nome: l.nome, cidade: l.cidade || 'sua região', categoria: cat, publico, gancho: gancho(l),
-    meu_nome: c.nome || '[seu nome]', minha_empresa: c.empresa || '[sua empresa]', beneficio: c.beneficio || PADRAO.beneficio };
-  return tpl.replace(/\{(\w+)\}/g, (_, k) => vars[k] ?? '');
+  const modelos = modelosAtuais();
+  return preencherModelo(modelos[Math.min(l.etapa || 0, modelos.length - 1)] || '', l);
 }
 const linkWA = l => l.e164 ? `https://wa.me/${l.e164}?text=${encodeURIComponent(mensagem(l))}` : '';
 const cadencia = () => String(S.cfg.cadencia || '3,7').split(',').map(x => parseInt(x, 10)).filter(x => x > 0);
@@ -410,10 +426,11 @@ async function reescreverIA(id) {
   const btn = document.querySelector(`[data-ia="${id}"]`); if (btn) { btn.disabled = true; btn.textContent = 'Escrevendo...'; }
   const c = S.cfg;
   const prompt = `Escreva UMA mensagem de WhatsApp em português do Brasil para prospectar este negócio local.
-Quem envia: ${c.nome || '[seu nome]'}, da ${c.empresa || '[sua empresa]'}. O que oferece: ${c.beneficio}.
+Quem envia: ${c.nome || 'o vendedor'}${c.empresa ? ', da ' + c.empresa : ''}. O que oferece: ${c.servico || PADRAO.servico}.
+Exemplo do tom esperado (não copie, só siga o estilo): "${mensagem({ ...l, msg: '' })}"
 Etapa: ${l.etapa ? 'follow-up nº ' + l.etapa + ' (a pessoa ainda não respondeu)' : 'primeiro contato'}.
 Dados do negócio (use só estes fatos, não invente nada): nome "${l.nome}", categoria "${l.categoria}", cidade "${l.cidade}", nota no Google ${l.nota || 'desconhecida'}, ${l.avaliacoes === '' ? 'avaliações desconhecidas' : l.avaliacoes + ' avaliações'}, ${l.site ? 'tem site' : 'não tem site'}.
-Regras: tom humano e educado, sem exagero, sem prometer resultado, no máximo 450 caracteres, no máximo 1 emoji, termine com uma pergunta simples. Responda só com o texto da mensagem.`;
+Regras: escreva como uma pessoa escreve no WhatsApp, frases curtas e simples, tom educado e natural, sem linguagem de vendedor, sem exagero, sem prometer resultado, sem jargões de marketing, sem travessões. Comece com "${saudacao()}". Use "vocês" para se referir ao negócio e não use artigo antes do nome do negócio. No máximo 350 caracteres e no máximo 1 emoji. Termine com uma pergunta simples, fácil de responder. Responda só com o texto da mensagem.`;
   try {
     const r = await S.sample(prompt, { modelTier: 'quick', cache: false });
     const texto = (r.text || '').trim().replace(/^"|"$/g, '');
@@ -442,9 +459,12 @@ async function carregarExemplos() {
 }
 async function salvarAjustes(form) {
   const f = new FormData(form);
-  S.cfg = { ...S.cfg, nome: f.get('nome').trim(), empresa: f.get('empresa').trim(), publico: f.get('publico').trim(),
-    beneficio: f.get('beneficio').trim() || PADRAO.beneficio, cadencia: f.get('cadencia').trim() || '3, 7',
-    soSemSite: f.get('soSemSite') === 'on', msgs: [f.get('m0'), f.get('m1'), f.get('m2')].map(s => String(s || '').trim()).filter(Boolean) };
+  const estilo = ESTILOS[f.get('estilo')] ? f.get('estilo') : 'direta';
+  const msgs = [f.get('m0'), f.get('m1'), f.get('m2')].map(s => String(s || '').trim());
+  const personalizado = msgs.some((m, i) => m && m !== ESTILOS[estilo].msgs[i]);
+  S.cfg = { ...S.cfg, nome: f.get('nome').trim(), empresa: f.get('empresa').trim(),
+    servico: f.get('servico').trim() || PADRAO.servico, cadencia: f.get('cadencia').trim() || '3, 7',
+    soSemSite: f.get('soSemSite') === 'on', estilo, personalizado, msgs: personalizado ? msgs.map((m, i) => m || ESTILOS[estilo].msgs[i]) : [] };
   render();
   try { await S.db.doc('config/perfil').set(S.cfg); toast('Ajustes salvos.'); }
   catch { toast('Não consegui salvar os ajustes agora.'); }
@@ -511,7 +531,7 @@ function telaHoje() {
   const leads = [...S.leads.values()];
   const retornos = leads.filter(l => l.followup && l.followup <= hoje() && ATIVOS.includes(l.status)).sort((a, b) => a.followup.localeCompare(b.followup));
   const novos = leads.filter(l => ['novo', 'qualificado'].includes(l.status)).sort((a, b) => b.score - a.score).slice(0, 10);
-  const semPerfil = !S.cfg.nome || !S.cfg.empresa;
+  const semPerfil = !S.cfg.nome;
   if (!leads.length) return `
     <div><h1>Bem-vindo ao Prospec</h1><p class="sub">Encontre empresas sem site no Google Maps, mande mensagens prontas pelo WhatsApp e acompanhe cada conversa até fechar.</p></div>
     <div class="panel"><h2>Comece em 3 passos</h2>
@@ -524,7 +544,7 @@ function telaHoje() {
     </div>`;
   return `
     <div><h1>Hoje</h1><p class="sub">${retornos.length ? `${retornos.length} retorno(s) para fazer` : 'Nenhum retorno pendente'} e ${novos.length} empresa(s) nova(s) prontas para abordar.</p></div>
-    ${semPerfil ? `<div class="notice">Suas mensagens ainda saem com "[seu nome]". <a href="#ajustes">Preencha seus dados em Ajustes</a>.</div>` : ''}
+    ${semPerfil ? `<div class="notice">Escolha o estilo das mensagens e coloque seu nome e o que você vende em <a href="#ajustes">Ajustes</a>.</div>` : ''}
     ${retornos.length ? `<h2>Retornos de hoje</h2>${retornos.map(cartao).join('')}` : ''}
     <h2>Melhores empresas para abordar</h2>
     ${novos.length ? novos.map(cartao).join('') : `<div class="panel empty"><strong>Todas as empresas já foram contatadas.</strong><a class="btn primary" href="#adicionar">Adicionar mais empresas</a></div>`}`;
@@ -624,23 +644,39 @@ function telaFunil() {
     </div></div>`;
 }
 
+function leadDeExemplo() {
+  const reais = [...S.leads.values()].filter(l => !l.site);
+  return reais.sort((a, b) => b.score - a.score)[0] || { nome: 'Barbearia do João', categoria: 'Barbearia', cidade: 'Campinas', nota: 4.8, avaliacoes: 64, etapa: 0 };
+}
+function atualizarPrevia() {
+  const f = $('#form-ajustes'); if (!f) return;
+  const ex = { ...leadDeExemplo(), msg: '' };
+  const guardado = S.cfg; S.cfg = { ...S.cfg, nome: f.nome.value.trim(), empresa: f.empresa.value.trim(), servico: f.servico.value.trim() || PADRAO.servico };
+  ['m0', 'm1', 'm2'].forEach((k, i) => { const el = document.getElementById('prev-' + k); if (el) el.textContent = preencherModelo(f[k].value, ex); });
+  S.cfg = guardado;
+  const n = $('#prev-nome'); if (n) n.textContent = ex.nome;
+}
 function telaAjustes() {
-  const c = S.cfg; const m = (c.msgs && c.msgs.length ? c.msgs : PADRAO.msgs);
+  const c = S.cfg; const m = modelosAtuais();
   return `
-    <div><h1>Ajustes</h1><p class="sub">Seus dados e os modelos de mensagem. Variáveis disponíveis: {nome}, {cidade}, {categoria}, {publico}, {gancho}, {meu_nome}, {minha_empresa}, {beneficio}.</p></div>
+    <div><h1>Ajustes</h1><p class="sub">Seus dados e as mensagens. A prévia ao lado de cada mensagem mostra como ela chega para <b id="prev-nome"></b>.</p></div>
     <form id="form-ajustes" class="panel">
       <div class="grid2">
-        <label class="f" for="a-nome">Seu nome<input type="text" id="a-nome" name="nome" value="${esc(c.nome)}"></label>
-        <label class="f" for="a-emp">Sua empresa<input type="text" id="a-emp" name="empresa" value="${esc(c.empresa)}"></label>
-        <label class="f" for="a-pub">Público no plural (opcional)<input type="text" id="a-pub" name="publico" value="${esc(c.publico)}" placeholder="Ex.: salões de beleza"></label>
+        <label class="f" for="a-nome">Seu nome<input type="text" id="a-nome" name="nome" value="${esc(c.nome)}" data-act="prev"></label>
+        <label class="f" for="a-emp">Sua empresa (opcional)<input type="text" id="a-emp" name="empresa" value="${esc(c.empresa)}" data-act="prev"></label>
+        <label class="f" for="a-srv">O que você vende<input type="text" id="a-srv" name="servico" value="${esc(c.servico || PADRAO.servico)}" placeholder="Ex.: criação de sites" data-act="prev"></label>
         <label class="f" for="a-cad">Dias até cada retorno<input type="text" id="a-cad" name="cadencia" value="${esc(c.cadencia)}" placeholder="3, 7"></label>
       </div>
-      <label class="f" for="a-ben">O que você oferece (complete: "Ajudo ... a ___")<input type="text" id="a-ben" name="beneficio" value="${esc(c.beneficio)}"></label>
       <label class="row" for="a-sem"><input type="checkbox" id="a-sem" name="soSemSite" ${c.soSemSite ? 'checked' : ''}> Adicionar só empresas sem site</label>
-      <label class="f" for="a-m0">Mensagem 1 · primeiro contato<textarea id="a-m0" name="m0" rows="4">${esc(m[0] || '')}</textarea></label>
-      <label class="f" for="a-m1">Mensagem 2 · primeiro retorno<textarea id="a-m1" name="m1" rows="3">${esc(m[1] || '')}</textarea></label>
-      <label class="f" for="a-m2">Mensagem 3 · último retorno<textarea id="a-m2" name="m2" rows="3">${esc(m[2] || '')}</textarea></label>
-      <div class="row"><button class="btn primary" type="submit">Salvar ajustes</button></div>
+      <label class="f" for="a-est">Estilo das mensagens<select id="a-est" name="estilo" data-act="estilo">
+        ${Object.entries(ESTILOS).map(([k, v]) => `<option value="${k}" ${c.estilo === k ? 'selected' : ''}>${v.rotulo}</option>`).join('')}</select></label>
+      ${[['m0', 'Mensagem 1 · primeiro contato', 4], ['m1', 'Mensagem 2 · se não responder', 3], ['m2', 'Mensagem 3 · último retorno', 3]].map(([k, rot, rows], i) => `
+        <div class="grid2">
+          <label class="f" for="a-${k}">${rot}<textarea id="a-${k}" name="${k}" rows="${rows}" data-act="prev">${esc(m[i] || '')}</textarea></label>
+          <div class="f">Como chega no WhatsApp<div class="notice" id="prev-${k}" style="white-space: pre-wrap"></div></div>
+        </div>`).join('')}
+      <p class="note">Você pode editar os textos. Partes entre chaves são trocadas sozinhas: {saudacao} (bom dia/boa tarde), {nome}, {elogio} (só aparece se a nota for boa), {categoria}, {da_cidade}, {em_cidade}, {servico}, {apresentacao}.</p>
+      <div class="row"><button class="btn primary" type="submit">Salvar ajustes</button><button class="btn ghost" type="button" data-act="restaurar">Voltar aos textos do estilo</button></div>
     </form>`;
 }
 
@@ -657,6 +693,7 @@ function render() {
   guardados.forEach(([gid, v]) => { const x = document.getElementById(gid); if (x && v) x.value = v; });
   if (avisoAntes && $('#m-link-aviso')) { $('#m-link-aviso').textContent = avisoAntes; $('#m-link-aviso').hidden = false; }
   ligarArquivo();
+  atualizarPrevia();
 }
 function avisoMaps(msg, erro) { const a = $('#m-link-aviso'); if (!a) return; a.hidden = !msg; a.textContent = msg; a.classList.toggle('err', !!erro); }
 function preencherForm(d) {
@@ -727,6 +764,7 @@ document.addEventListener('click', e => {
   else if (act === 'exemplos') carregarExemplos();
   else if (act === 'mais') { S.limite += 100; render(); }
   else if (act === 'buscar-maps') buscarNoMaps();
+  else if (act === 'restaurar') { const est = ESTILOS[$('#a-est').value] || ESTILOS.direta; ['m0', 'm1', 'm2'].forEach((k, i) => { $('#a-' + k).value = est.msgs[i]; }); atualizarPrevia(); }
 });
 let tFiltro, tTexto = {};
 document.addEventListener('input', e => {
@@ -737,6 +775,7 @@ document.addEventListener('input', e => {
     if (av) { av.hidden = !el.value.trim(); av.textContent = !r.valido ? 'Esse link não parece ser do Google Maps.' : r.nome ? `Empresa encontrada no link: ${r.nome}. Agora complete o telefone.` : 'Link guardado. Este tipo de link não traz o nome: digite o nome e o telefone da empresa.'; }
     return;
   }
+  if (act === 'prev') { atualizarPrevia(); return; }
   if (act === 'mtexto') { if (el.value.trim().length > 20) preencherForm(extrairDoTexto(el.value, lerLinkMaps($('#m-link').value).nome)); return; }
   if (act === 'fq') { clearTimeout(tFiltro); tFiltro = setTimeout(() => { S.filtro.q = el.value; render(); }, 250); }
   else if (act === 'msg' || act === 'notas') {
@@ -748,6 +787,7 @@ document.addEventListener('input', e => {
 });
 document.addEventListener('change', e => {
   const el = e.target; const act = el.dataset.act; const id = el.dataset.id;
+  if (act === 'estilo' || act === 'restaurar') { const est = ESTILOS[el.value] || ESTILOS.direta; ['m0', 'm1', 'm2'].forEach((k, i) => { $('#a-' + k).value = est.msgs[i]; }); atualizarPrevia(); return; }
   if (act === 'status') mudarStatus(id, el.value);
   else if (act === 'followup') alterar(id, l => { l.followup = el.value; });
   else if (act === 'maps') {

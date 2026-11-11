@@ -162,6 +162,18 @@ function paraE164(t) {
 const ehCelular = e => e.length === 13 && e.startsWith('55') && e[4] === '9';
 const fmtTel = e => e.length === 13 ? `(${e.slice(2,4)}) ${e.slice(4,9)}-${e.slice(9)}` : e.length === 12 ? `(${e.slice(2,4)}) ${e.slice(4,8)}-${e.slice(8)}` : e;
 const idSeguro = s => { let x = String(s).replace(/[^A-Za-z0-9_\-.~:@+]/g, '-').slice(0, 150); return /^\.+$/.test(x) || !x ? 'x' + Date.now() : x; };
+/* Lê o que foi colado do Google Maps: o link (longo ou curto) e, quando der, o nome da empresa. */
+function lerLinkMaps(txt) {
+  txt = String(txt || '').trim();
+  const url = (txt.match(/https?:\/\/[^\s]+/) || [])[0] || '';
+  const ehMaps = /google\.[a-z.]+\/maps|maps\.app\.goo\.gl|goo\.gl\/maps|maps\.google\./i.test(url);
+  let nome = '';
+  const m = url.match(/\/maps\/place\/([^/@?]+)/);
+  if (m) { try { nome = decodeURIComponent(m[1].replace(/\+/g, ' ')); } catch { nome = m[1].replace(/\+/g, ' '); } }
+  if (!nome) { const q = url.match(/[?&](?:q|query)=([^&]+)/); if (q) { try { nome = decodeURIComponent(q[1].replace(/\+/g, ' ')); } catch {} } }
+  if (!nome && url) { const antes = txt.replace(url, '').trim().split('\n')[0] || ''; nome = antes.split(/[,·]/)[0].trim(); }
+  return { url: ehMaps ? url : '', nome: ehMaps ? nome.slice(0, 120) : '', valido: ehMaps };
+}
 
 /* ===================== score e mensagens ===================== */
 function pontuar(l) {
@@ -441,6 +453,7 @@ function cartao(l) {
           <label class="f" for="fu-${l.id}">Próximo contato<input type="date" id="fu-${l.id}" value="${l.followup || ''}" data-act="followup" data-id="${l.id}"></label>
           <label class="f" for="nt-${l.id}">Notas<textarea id="nt-${l.id}" rows="2" data-act="notas" data-id="${l.id}" placeholder="Ex.: falar com a Ana à tarde">${esc(l.notas)}</textarea></label>
         </div>
+        <label class="f" for="mp-${l.id}">Link do Google Maps<input type="text" id="mp-${l.id}" inputmode="url" value="${esc(/google\.[a-z.]+\/maps\/search\/\?api=1/.test(l.maps || '') ? '' : l.maps)}" placeholder="Cole o link do perfil da empresa" data-act="maps" data-id="${l.id}"></label>
         ${l.email ? `<div class="note">E-mail: <span class="num">${esc(l.email)}</span></div>` : ''}
         ${(l.hist || []).length ? `<div class="hist">${l.hist.slice().reverse().map(h => `<span>${dataBR(h.d)} · ${esc(h.t)}</span>`).join('')}</div>` : ''}
         <div class="row">${S.confirmarExcluir === l.id
@@ -534,8 +547,10 @@ function telaAdicionar() {
       </div>
     </div>
     <div class="panel"><h2>Adicionar uma empresa</h2>
-      <p class="note">Achou uma empresa sem site no app do Google Maps? Cadastre aqui.</p>
+      <p class="note">No Google Maps, abra a empresa, toque em <b>Compartilhar</b> e depois em <b>Copiar link</b>. Cole o link abaixo: o nome é preenchido sozinho quando o link traz o nome. Complete o telefone, que aparece no perfil da empresa.</p>
       <form id="form-manual" class="grid2">
+        <label class="f" for="m-link" style="grid-column: 1 / -1">Link do Google Maps<input type="text" id="m-link" name="link" inputmode="url" placeholder="Cole aqui o link (ex.: https://maps.app.goo.gl/...)" data-act="mlink" autocomplete="off"></label>
+        <div class="note" id="m-link-aviso" style="grid-column: 1 / -1" hidden></div>
         <label class="f" for="m-nome">Nome da empresa *<input type="text" id="m-nome" name="nome" required></label>
         <label class="f" for="m-tel">WhatsApp ou telefone *<input type="text" id="m-tel" name="telefone" inputmode="tel" placeholder="(19) 99999-9999" required></label>
         <label class="f" for="m-cat">Tipo de negócio<input type="text" id="m-cat" name="categoria" placeholder="Ex.: Barbearia"></label>
@@ -625,6 +640,12 @@ document.addEventListener('click', e => {
 let tFiltro, tTexto = {};
 document.addEventListener('input', e => {
   const el = e.target; const act = el.dataset.act; const id = el.dataset.id;
+  if (act === 'mlink') {
+    const r = lerLinkMaps(el.value); const n = document.getElementById('m-nome'); const av = document.getElementById('m-link-aviso');
+    if (r.nome && n && !n.value) n.value = r.nome;
+    if (av) { av.hidden = !el.value.trim(); av.textContent = !r.valido ? 'Esse link não parece ser do Google Maps.' : r.nome ? `Empresa encontrada no link: ${r.nome}. Agora complete o telefone.` : 'Link guardado. Este tipo de link não traz o nome: digite o nome e o telefone da empresa.'; }
+    return;
+  }
   if (act === 'fq') { clearTimeout(tFiltro); tFiltro = setTimeout(() => { S.filtro.q = el.value; render(); }, 250); }
   else if (act === 'msg' || act === 'notas') {
     const l = S.leads.get(id); if (!l) return;
@@ -637,6 +658,12 @@ document.addEventListener('change', e => {
   const el = e.target; const act = el.dataset.act; const id = el.dataset.id;
   if (act === 'status') mudarStatus(id, el.value);
   else if (act === 'followup') alterar(id, l => { l.followup = el.value; });
+  else if (act === 'maps') {
+    const r = lerLinkMaps(el.value);
+    if (el.value.trim() && !r.valido) { toast('Esse link não parece ser do Google Maps.'); return; }
+    alterar(id, l => { l.maps = r.url || 'https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(`${l.nome} ${l.cidade || ''}`); });
+    toast('Link do Google Maps salvo.');
+  }
   else if (act === 'fst') { S.filtro.status = el.value; render(); }
   else if (act === 'ft') { S.filtro.temp = el.value; render(); }
 });
@@ -646,7 +673,9 @@ document.addEventListener('submit', e => {
   if (e.target.id === 'form-manual') {
     const f = Object.fromEntries(new FormData(e.target));
     if (!paraE164(f.telefone)) { toast('Telefone inválido. Use DDD + número.'); return; }
-    prepararImportacao([{ nome: f.nome, telefone: f.telefone, categoria: f.categoria, cidade: f.cidade, nota: f.nota, avaliacoes: f.avaliacoes }], 'Manual');
+    const lk = lerLinkMaps(f.link);
+    if (String(f.link || '').trim() && !lk.valido) { toast('Esse link não parece ser do Google Maps.'); return; }
+    prepararImportacao([{ nome: f.nome, telefone: f.telefone, categoria: f.categoria, cidade: f.cidade, nota: f.nota, avaliacoes: f.avaliacoes, maps: lk.url }], 'Manual');
     if (S.preview.novos.length) { confirmarImportacao(); e.target.reset(); toast('Empresa adicionada.'); }
     else { toast(S.preview.repetidos ? 'Essa empresa já está na lista.' : 'Não consegui adicionar.'); S.preview = null; render(); }
   }

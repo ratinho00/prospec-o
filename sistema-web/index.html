@@ -148,7 +148,7 @@ const ESTILOS = {
 };
 const PADRAO = { nome: '', empresa: '', servico: 'criação de sites', cadencia: '3, 7', soSemSite: true, estilo: 'direta', personalizado: false, msgs: [] };
 const S = { db: null, sample: null, downloads: null, leads: new Map(), cfg: { ...PADRAO }, loaded: false, slow: false, erro: '',
-  view: 'hoje', filtro: { q: '', status: 'abertos', temp: '' }, aberto: new Set(), limite: 100, preview: null, confirmarExcluir: '' };
+  view: 'hoje', filtro: { q: '', status: 'abertos', temp: '' }, aberto: new Set(), limite: 100, preview: null, confirmarExcluir: '', preparando: new Set() };
 
 /* ===================== utilidades ===================== */
 const $ = s => document.querySelector(s);
@@ -406,14 +406,14 @@ function enviei(id) {
     const cad = cadencia(); const etapa = l.etapa || 0;
     if (['novo', 'qualificado'].includes(l.status)) l.status = 'contatado';
     l.followup = cad[etapa] ? maisDias(cad[etapa]) : '';
-    l.hist = [...(l.hist || []), { d: hoje(), t: `Mensagem ${etapa + 1} enviada` }].slice(-30);
+    l.hist = [...(l.hist || []), { d: hoje(), t: `Mensagem ${etapa + 1} enviada`, m: mensagem(l) }].slice(-100);
     l.etapa = etapa + 1; l.msg = '';
   });
   toast('Envio registrado. Próximo contato agendado.');
 }
 function mudarStatus(id, st) {
   alterar(id, l => {
-    l.hist = [...(l.hist || []), { d: hoje(), t: `${STATUS_ROTULO[l.status]} → ${STATUS_ROTULO[st]}` }].slice(-30);
+    l.hist = [...(l.hist || []), { d: hoje(), t: `${STATUS_ROTULO[l.status]} → ${STATUS_ROTULO[st]}` }].slice(-100);
     l.status = st; if (['fechado', 'perdido', 'nao_contatar'].includes(st)) l.followup = '';
   });
 }
@@ -421,24 +421,70 @@ async function excluir(id) {
   S.leads.delete(id); S.confirmarExcluir = ''; render();
   try { await S.db.collection('leads').doc(id).delete(); } catch { toast('Não consegui excluir agora.'); }
 }
+function promptMensagem(l) {
+  const c = S.cfg;
+  return `Escreva UMA mensagem de WhatsApp em português do Brasil para prospectar este negócio local.
+Quem envia: ${c.nome || 'o vendedor'}${c.empresa ? ', da ' + c.empresa : ''}. O que oferece: ${c.servico || PADRAO.servico}.
+${c.sobre ? 'Sobre quem envia (use no máximo um detalhe, só se ajudar a criar confiança; nunca invente nada além disto): ' + c.sobre : ''}
+Exemplo do tom esperado (não copie, só siga o estilo): "${mensagem({ ...l, msg: '' })}"
+Etapa: ${l.etapa ? 'retorno nº ' + l.etapa + ' (a pessoa ainda não respondeu a mensagem anterior)' : 'primeiro contato'}.
+Dados do negócio (use só estes fatos, não invente nada): nome "${l.nome}", categoria "${l.categoria || 'não informada'}", cidade "${l.cidade || 'não informada'}", nota no Google ${l.nota || 'desconhecida'}, ${l.avaliacoes === '' || l.avaliacoes == null ? 'número de avaliações desconhecido' : l.avaliacoes + ' avaliações'}, ${l.site ? 'tem site' : 'não tem site'}${l.instagram ? ', tem Instagram' : ''}.
+${l.notas ? 'Anotações do vendedor sobre este cliente: ' + l.notas : ''}
+Regras: escreva como uma pessoa escreve no WhatsApp, frases curtas e simples, tom educado e natural, sem linguagem de vendedor, sem exagero, sem prometer resultado, sem jargões de marketing, sem travessões. Comece com "${saudacao()}". Use "vocês" para se referir ao negócio e não use artigo antes do nome do negócio. Se a nota for 4,5 ou mais, pode elogiar. No máximo 380 caracteres e no máximo 1 emoji. Termine com uma pergunta simples, fácil de responder. Responda só com o texto da mensagem.`;
+}
+async function escreverComIA(l) {
+  const r = await S.sample(promptMensagem(l), { modelTier: 'quick', cache: false });
+  return (r.text || '').trim().replace(/^["“]|["”]$/g, '');
+}
 async function reescreverIA(id) {
   const l = S.leads.get(id); if (!l || !S.sample) return;
   const btn = document.querySelector(`[data-ia="${id}"]`); if (btn) { btn.disabled = true; btn.textContent = 'Escrevendo...'; }
-  const c = S.cfg;
-  const prompt = `Escreva UMA mensagem de WhatsApp em português do Brasil para prospectar este negócio local.
-Quem envia: ${c.nome || 'o vendedor'}${c.empresa ? ', da ' + c.empresa : ''}. O que oferece: ${c.servico || PADRAO.servico}.
-Exemplo do tom esperado (não copie, só siga o estilo): "${mensagem({ ...l, msg: '' })}"
-Etapa: ${l.etapa ? 'follow-up nº ' + l.etapa + ' (a pessoa ainda não respondeu)' : 'primeiro contato'}.
-Dados do negócio (use só estes fatos, não invente nada): nome "${l.nome}", categoria "${l.categoria}", cidade "${l.cidade}", nota no Google ${l.nota || 'desconhecida'}, ${l.avaliacoes === '' ? 'avaliações desconhecidas' : l.avaliacoes + ' avaliações'}, ${l.site ? 'tem site' : 'não tem site'}.
-Regras: escreva como uma pessoa escreve no WhatsApp, frases curtas e simples, tom educado e natural, sem linguagem de vendedor, sem exagero, sem prometer resultado, sem jargões de marketing, sem travessões. Comece com "${saudacao()}". Use "vocês" para se referir ao negócio e não use artigo antes do nome do negócio. No máximo 350 caracteres e no máximo 1 emoji. Termine com uma pergunta simples, fácil de responder. Responda só com o texto da mensagem.`;
   try {
-    const r = await S.sample(prompt, { modelTier: 'quick', cache: false });
-    const texto = (r.text || '').trim().replace(/^"|"$/g, '');
+    const texto = await escreverComIA(l);
     if (texto) alterar(id, x => { x.msg = texto; });
   } catch (e) {
     toast(e && e.code === 'rate_limited' ? 'Muitos pedidos seguidos. Espere um pouco.' : 'A IA não está disponível agora.');
     render();
   }
+}
+/* Botão do lead: atualiza os dados pelo Google Maps (quando possível) e já escreve a mensagem. */
+async function prepararLead(id) {
+  const l0 = S.leads.get(id); if (!l0 || S.preparando.has(id)) return;
+  S.preparando.add(id); render();
+  const avisos = [];
+  let l = structuredClone(l0); l.id = id;
+  try {
+    if (S.mcp && l.maps && lerLinkMaps(l.maps).valido) {
+      try {
+        const d = await lerPaginaMaps(l.maps, '');
+        if (d && (d.telefone || d.nota)) {
+          if (d.telefone && !l.e164) { l.telefone = d.telefone; l.e164 = paraE164(d.telefone); l.celular = ehCelular(l.e164); }
+          if (d.nota) l.nota = d.nota;
+          if (d.avaliacoes !== '') l.avaliacoes = d.avaliacoes;
+          if (d.categoria && !l.categoria) l.categoria = d.categoria;
+          if (d.cidade && !l.cidade) l.cidade = d.cidade;
+          if (d.instagram && !l.instagram) l.instagram = d.instagram;
+          if (d.email && !l.email) l.email = d.email;
+          if (d.site) { l.site = d.site; avisos.push(`atenção: esta empresa agora tem site (${d.site})`); }
+          pontuar(l);
+          l.hist = [...(l.hist || []), { d: hoje(), t: 'Dados atualizados pelo Google Maps' }].slice(-100);
+          avisos.unshift('dados atualizados pelo Google Maps');
+        }
+      } catch (e) { if (e && e.code !== 'server_not_connected') avisos.push('não consegui atualizar pelo Google Maps'); }
+    }
+    let texto = '';
+    if (S.sample) { try { texto = await escreverComIA(l); } catch (e) { avisos.push(e && e.code === 'rate_limited' ? 'IA ocupada, usei o modelo do estilo' : 'IA indisponível, usei o modelo do estilo'); } }
+    l.msg = texto;
+    S.leads.set(id, l); S.aberto.add(id);
+    await salvarLead(l);
+    toast('Mensagem pronta' + (avisos.length ? ': ' + avisos.join('; ') : '') + '.');
+  } finally { S.preparando.delete(id); render(); }
+}
+async function baixarBackup() {
+  if (!S.downloads) return toast('Baixar não está disponível nesta visualização.');
+  const dados = { versao: 1, salvoEm: new Date().toISOString(), ajustes: S.cfg, leads: [...S.leads.values()] };
+  try { await S.downloads.save({ filename: `prospec-backup-${hoje()}.json`, data: JSON.stringify(dados, null, 1) }); toast('Cópia salva.'); }
+  catch (e) { if (e && e.code !== 'declined') toast('Não consegui baixar agora.'); }
 }
 async function exportar() {
   const cols = ['score','temp','status','nome','categoria','cidade','telefone','nota','avaliacoes','email','instagram','followup','etapa','notas','maps'];
@@ -463,7 +509,7 @@ async function salvarAjustes(form) {
   const msgs = [f.get('m0'), f.get('m1'), f.get('m2')].map(s => String(s || '').trim());
   const personalizado = msgs.some((m, i) => m && m !== ESTILOS[estilo].msgs[i]);
   S.cfg = { ...S.cfg, nome: f.get('nome').trim(), empresa: f.get('empresa').trim(),
-    servico: f.get('servico').trim() || PADRAO.servico, cadencia: f.get('cadencia').trim() || '3, 7',
+    servico: f.get('servico').trim() || PADRAO.servico, sobre: String(f.get('sobre') || '').trim().slice(0, 2000), cadencia: f.get('cadencia').trim() || '3, 7',
     soSemSite: f.get('soSemSite') === 'on', estilo, personalizado, msgs: personalizado ? msgs.map((m, i) => m || ESTILOS[estilo].msgs[i]) : [] };
   render();
   try { await S.db.doc('config/perfil').set(S.cfg); toast('Ajustes salvos.'); }
@@ -491,6 +537,7 @@ function cartao(l) {
       </div>
       <div class="chips">${(l.motivos || []).map(m => `<span class="chip">${esc(m)}</span>`).join('')}</div>
       <div class="actions">
+        ${l.status !== 'nao_contatar' ? `<button class="btn primary" data-act="preparar" data-id="${l.id}" ${S.preparando.has(l.id) ? 'disabled' : ''}>${S.preparando.has(l.id) ? 'Preparando...' : (l.msg ? '✨ Refazer mensagem' : '✨ Preparar mensagem')}</button>` : ''}
         ${wa ? `<a class="btn wa" href="${wa}" target="_blank" rel="noopener">${ICON_WA}${l.celular ? 'WhatsApp' : 'WhatsApp (fixo)'}</a>` : ''}
         ${l.status !== 'nao_contatar' ? `<button class="btn" data-act="enviei" data-id="${l.id}">✓ Enviei a mensagem ${(l.etapa || 0) + 1}</button>` : ''}
         <select aria-label="Etapa do funil" data-act="status" data-id="${l.id}">${STATUS.map(s => `<option value="${s}" ${s === l.status ? 'selected' : ''}>${STATUS_ROTULO[s]}</option>`).join('')}</select>
@@ -511,7 +558,7 @@ function cartao(l) {
         </div>
         <label class="f" for="mp-${l.id}">Link do Google Maps<input type="text" id="mp-${l.id}" inputmode="url" value="${esc(/google\.[a-z.]+\/maps\/search\/\?api=1/.test(l.maps || '') ? '' : l.maps)}" placeholder="Cole o link do perfil da empresa" data-act="maps" data-id="${l.id}"></label>
         ${l.email ? `<div class="note">E-mail: <span class="num">${esc(l.email)}</span></div>` : ''}
-        ${(l.hist || []).length ? `<div class="hist">${l.hist.slice().reverse().map(h => `<span>${dataBR(h.d)} · ${esc(h.t)}</span>`).join('')}</div>` : ''}
+        ${(l.hist || []).length ? `<div class="hist"><b>Histórico</b>${l.hist.slice().reverse().map(h => `<span>${dataBR(h.d)} · ${esc(h.t)}${h.m ? `<br><i>"${esc(h.m)}"</i>` : ''}</span>`).join('')}</div>` : ''}
         <div class="row">${S.confirmarExcluir === l.id
           ? `<button class="btn danger" data-act="excluir-sim" data-id="${l.id}">Confirmar exclusão</button><button class="btn ghost" data-act="excluir-nao">Cancelar</button>`
           : `<button class="btn ghost danger" data-act="excluir" data-id="${l.id}">Excluir empresa</button>`}</div>
@@ -667,6 +714,7 @@ function telaAjustes() {
         <label class="f" for="a-srv">O que você vende<input type="text" id="a-srv" name="servico" value="${esc(c.servico || PADRAO.servico)}" placeholder="Ex.: criação de sites" data-act="prev"></label>
         <label class="f" for="a-cad">Dias até cada retorno<input type="text" id="a-cad" name="cadencia" value="${esc(c.cadencia)}" placeholder="3, 7"></label>
       </div>
+      <label class="f" for="a-sobre">Sobre você e seu trabalho (a IA usa isto para escrever as mensagens)<textarea id="a-sobre" name="sobre" rows="5" placeholder="Ex.: Faço sites há 3 anos, já fiz mais de 40 sites para clínicas e salões de Campinas. Entrego em 7 dias, a partir de R$ 600. Portfólio: meusite.com.br/portfolio">${esc(c.sobre || '')}</textarea></label>
       <label class="row" for="a-sem"><input type="checkbox" id="a-sem" name="soSemSite" ${c.soSemSite ? 'checked' : ''}> Adicionar só empresas sem site</label>
       <label class="f" for="a-est">Estilo das mensagens<select id="a-est" name="estilo" data-act="estilo">
         ${Object.entries(ESTILOS).map(([k, v]) => `<option value="${k}" ${c.estilo === k ? 'selected' : ''}>${v.rotulo}</option>`).join('')}</select></label>
@@ -677,7 +725,11 @@ function telaAjustes() {
         </div>`).join('')}
       <p class="note">Você pode editar os textos. Partes entre chaves são trocadas sozinhas: {saudacao} (bom dia/boa tarde), {nome}, {elogio} (só aparece se a nota for boa), {categoria}, {da_cidade}, {em_cidade}, {servico}, {apresentacao}.</p>
       <div class="row"><button class="btn primary" type="submit">Salvar ajustes</button><button class="btn ghost" type="button" data-act="restaurar">Voltar aos textos do estilo</button></div>
-    </form>`;
+    </form>
+    <div class="panel"><h2>Seus dados estão salvos</h2>
+      <p class="note">Tudo fica salvo automaticamente na sua conta do Claude: empresas, mensagens enviadas, notas, histórico e ajustes. Abra este link em qualquer aparelho e continua tudo lá. Se quiser uma cópia extra no seu computador, baixe abaixo.</p>
+      <div class="row"><button class="btn" data-act="backup">Baixar cópia de segurança</button><button class="btn ghost" data-act="exportar">Baixar planilha (CSV)</button></div>
+    </div>`;
 }
 
 function render() {
@@ -713,23 +765,27 @@ function idDaAba(r) {
   const p = r && r.payload; if (p && typeof p === 'object' && (p.tabId ?? p.tab_id) != null) return p.tabId ?? p.tab_id;
   const m = textoResultado(r).match(/tab\s*_?id\W{0,4}(\d+)/i); return m ? Number(m[1]) : null;
 }
+async function lerPaginaMaps(url, nomeLink) {
+  const B = 'host:claude_browser';
+  let aba = S.abaMaps ?? null;
+  if (aba != null) { try { await S.mcp.callTool(B, 'navigate', { url, tabId: aba }); } catch (e) { if (e && ['server_not_connected', 'not_in_manifest', 'cancelled', 'approval_required'].includes(e.code)) throw e; aba = null; } }
+  if (aba == null) { const res = await S.mcp.callTool(B, 'preview_start', { url }); aba = idDaAba(res); S.abaMaps = aba; }
+  let d = null;
+  for (let t = 0; t < 4; t++) {
+    await esperar(t ? 2500 : 3500);
+    const res = await S.mcp.callTool(B, 'get_page_text', aba != null ? { tabId: aba } : {}, { cache: false });
+    d = extrairDoTexto(textoResultado(res), nomeLink);
+    if (d.telefone || d.nota) break;
+  }
+  return d;
+}
 async function buscarNoMaps() {
   const r = lerLinkMaps($('#m-link').value);
   if (!r.valido) return avisoMaps('Cole primeiro o link do Google Maps da empresa.', true);
   if (!S.mcp) return avisoMaps('A busca automática não está disponível aqui. Use a opção de colar o texto da página, logo abaixo.', true);
   const b = $('#b-buscar'); b.disabled = true; b.textContent = 'Buscando...'; avisoMaps('Abrindo a página da empresa no navegador do app...');
-  const B = 'host:claude_browser';
   try {
-    let aba = S.abaMaps ?? null;
-    if (aba != null) { try { await S.mcp.callTool(B, 'navigate', { url: r.url, tabId: aba }); } catch (e) { if (e && ['server_not_connected', 'not_in_manifest', 'cancelled', 'approval_required'].includes(e.code)) throw e; aba = null; } }
-    if (aba == null) { const res = await S.mcp.callTool(B, 'preview_start', { url: r.url }); aba = idDaAba(res); S.abaMaps = aba; }
-    let d = null;
-    for (let t = 0; t < 4; t++) {
-      await esperar(t ? 2500 : 3500);
-      const res = await S.mcp.callTool(B, 'get_page_text', aba != null ? { tabId: aba } : {}, { cache: false });
-      d = extrairDoTexto(textoResultado(res), r.nome);
-      if (d.telefone || d.nota) break;
-    }
+    const d = await lerPaginaMaps(r.url, r.nome);
     preencherForm(d || extrairDoTexto('', r.nome));
   } catch (e) {
     const c = e && e.code;
@@ -764,6 +820,8 @@ document.addEventListener('click', e => {
   else if (act === 'exemplos') carregarExemplos();
   else if (act === 'mais') { S.limite += 100; render(); }
   else if (act === 'buscar-maps') buscarNoMaps();
+  else if (act === 'preparar') prepararLead(id);
+  else if (act === 'backup') baixarBackup();
   else if (act === 'restaurar') { const est = ESTILOS[$('#a-est').value] || ESTILOS.direta; ['m0', 'm1', 'm2'].forEach((k, i) => { $('#a-' + k).value = est.msgs[i]; }); atualizarPrevia(); }
 });
 let tFiltro, tTexto = {};

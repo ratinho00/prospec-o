@@ -174,6 +174,42 @@ function lerLinkMaps(txt) {
   if (!nome && url) { const antes = txt.replace(url, '').trim().split('\n')[0] || ''; nome = antes.split(/[,·]/)[0].trim(); }
   return { url: ehMaps ? url : '', nome: ehMaps ? nome.slice(0, 120) : '', valido: ehMaps };
 }
+/* Extrai os dados do texto da página de uma empresa no Google Maps (lido pelo navegador do app ou colado). */
+const PALAVRAS_UI = /^(vis[aã]o geral|avalia[cç][oõ]es|sobre|rotas|salvar|pr[oó]ximo|compartilhar|enviar para o smartphone|menu|fotos|ligar|site|reivindicar|sugerir|pesquisar|resultados|patrocinado|abrir|aberto|fechado|fecha|abre|google maps|direções|direcoes|ver fotos|adicionar|escrever|mais|todos|pular|.*estrelas?)\b/i;
+function extrairDoTexto(txt, nomeLink) {
+  const linhas = String(txt || '').replace(/\r/g, '').split('\n').map(x => x.replace(/[​-‏-]/g, '').trim()).filter(Boolean);
+  const d = { nome: nomeLink || '', telefone: '', categoria: '', cidade: '', nota: '', avaliacoes: '', site: '', instagram: '', email: '' };
+  let iNota = -1;
+  for (let i = 0; i < linhas.length; i++) {
+    const m = linhas[i].match(/^([1-5][,.]\d)\s*(?:estrelas?)?\s*(?:\(\s*([\d.]+)\s*\))?$/i);
+    if (m) {
+      iNota = i; d.nota = Number(m[1].replace(',', '.'));
+      const prox = (linhas[i + 1] || '').match(/^\(?\s*([\d.]+)\s*\)?(?:\s*avalia[cç][oõ]es)?$/i);
+      d.avaliacoes = m[2] ? Number(m[2].replace(/\./g, '')) : prox ? Number(prox[1].replace(/\./g, '')) : '';
+      break;
+    }
+  }
+  if (d.avaliacoes === '') { const m = txt.match(/([\d.]+)\s+(?:avalia[cç][oõ]es|coment[aá]rios|reviews)/i); if (m) d.avaliacoes = Number(m[1].replace(/\./g, '')); }
+  if (!d.nome && iNota > 0) { for (let k = iNota - 1; k >= Math.max(0, iNota - 3); k--) { if (!PALAVRAS_UI.test(linhas[k]) && linhas[k].length <= 90) { d.nome = linhas[k]; break; } } }
+  if (iNota >= 0) {
+    for (let k = iNota + 1; k < Math.min(linhas.length, iNota + 6); k++) {
+      const c = linhas[k].split(/\s*[·⋅•]\s*/)[0].trim();
+      if (c && c.length <= 45 && !/\d/.test(c) && !PALAVRAS_UI.test(c) && /^[A-Za-zÀ-ú]/.test(c)) { d.categoria = c; break; }
+    }
+  }
+  for (const l of linhas) {
+    if (!d.telefone) { const t = l.match(/(?:\+?55\s?)?\(?\b\d{2}\)?\s?9?\d{4}[-\s]\d{4}\b/); if (t && !/^\d{5}-\d{3}$/.test(t[0].trim())) d.telefone = t[0].trim(); }
+    if (!d.cidade) { const c = l.match(/,\s*([A-Za-zÀ-ú' .]+?)\s+-\s+([A-Z]{2})(?:,|\s|$)/); if (c) d.cidade = c[1].trim(); }
+    if (!d.email) { const e = l.match(/[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}/i); if (e) d.email = e[0].toLowerCase(); }
+    const dom = l.match(/^(?:https?:\/\/)?((?:www\.)?[a-z0-9-]+(?:\.[a-z0-9-]+)+)(\/\S*)?$/i);
+    if (dom && !/google\.|goo\.gl|gstatic|\+/i.test(l) && !/^\d/.test(dom[1])) {
+      if (/instagram\.com/i.test(l)) { if (!d.instagram) d.instagram = l.startsWith('http') ? l : 'https://' + l; }
+      else if (/facebook\.com|wa\.me|whatsapp\.com|linktr\.ee/i.test(l)) { /* rede social: não conta como site */ }
+      else if (!d.site) d.site = l;
+    }
+  }
+  return d;
+}
 
 /* ===================== score e mensagens ===================== */
 function pontuar(l) {
@@ -550,7 +586,13 @@ function telaAdicionar() {
       <p class="note">No Google Maps, abra a empresa, toque em <b>Compartilhar</b> e depois em <b>Copiar link</b>. Cole o link abaixo: o nome é preenchido sozinho quando o link traz o nome. Complete o telefone, que aparece no perfil da empresa.</p>
       <form id="form-manual" class="grid2">
         <label class="f" for="m-link" style="grid-column: 1 / -1">Link do Google Maps<input type="text" id="m-link" name="link" inputmode="url" placeholder="Cole aqui o link (ex.: https://maps.app.goo.gl/...)" data-act="mlink" autocomplete="off"></label>
-        <div class="note" id="m-link-aviso" style="grid-column: 1 / -1" hidden></div>
+        <div class="row" style="grid-column: 1 / -1"><button class="btn primary" type="button" data-act="buscar-maps" id="b-buscar">Buscar informações da empresa</button><span class="note">Funciona no app Claude para computador.</span></div>
+        <details style="grid-column: 1 / -1"><summary class="note">Não está no app para computador? Cole o texto da página</summary>
+          <p class="note">Abra o link no navegador do computador, aperte <b>Ctrl+A</b> e <b>Ctrl+C</b> na página da empresa e cole abaixo (<b>Ctrl+V</b>).</p>
+          <textarea id="m-texto" rows="3" data-act="mtexto" placeholder="Cole aqui o texto da página da empresa no Google Maps"></textarea>
+        </details>
+        <div class="notice" id="m-link-aviso" style="grid-column: 1 / -1" hidden></div>
+        <input type="hidden" id="m-site" name="site"><input type="hidden" id="m-ig" name="instagram"><input type="hidden" id="m-email" name="email">
         <label class="f" for="m-nome">Nome da empresa *<input type="text" id="m-nome" name="nome" required></label>
         <label class="f" for="m-tel">WhatsApp ou telefone *<input type="text" id="m-tel" name="telefone" inputmode="tel" placeholder="(19) 99999-9999" required></label>
         <label class="f" for="m-cat">Tipo de negócio<input type="text" id="m-cat" name="categoria" placeholder="Ex.: Barbearia"></label>
@@ -605,12 +647,60 @@ function telaAjustes() {
 function render() {
   const telas = { hoje: telaHoje, leads: telaLeads, adicionar: telaAdicionar, funil: telaFunil, ajustes: telaAjustes };
   const foco = document.activeElement && document.activeElement.id; const pos = foco && document.activeElement.selectionStart;
+  const guardados = [...document.querySelectorAll('#form-manual input, #form-manual textarea')].map(x => [x.id, x.value]);
+  const avisoAntes = $('#m-link-aviso') && !$('#m-link-aviso').hidden ? $('#m-link-aviso').textContent : '';
   $('#app').innerHTML = (telas[S.view] || telaHoje)();
   document.querySelectorAll('#tabs a').forEach(a => a.dataset.view === S.view ? a.setAttribute('aria-current', 'page') : a.removeAttribute('aria-current'));
   const vencidos = [...S.leads.values()].filter(l => l.followup && l.followup <= hoje() && ATIVOS.includes(l.status)).length;
   $('#c-hoje').textContent = vencidos; $('#c-leads').textContent = S.leads.size;
   if (foco) { const el = document.getElementById(foco); if (el) { el.focus(); try { if (pos != null) el.setSelectionRange(pos, pos); } catch {} } }
+  guardados.forEach(([gid, v]) => { const x = document.getElementById(gid); if (x && v) x.value = v; });
+  if (avisoAntes && $('#m-link-aviso')) { $('#m-link-aviso').textContent = avisoAntes; $('#m-link-aviso').hidden = false; }
   ligarArquivo();
+}
+function avisoMaps(msg, erro) { const a = $('#m-link-aviso'); if (!a) return; a.hidden = !msg; a.textContent = msg; a.classList.toggle('err', !!erro); }
+function preencherForm(d) {
+  const por = (id, v) => { const x = document.getElementById(id); if (x && v !== '' && v != null) x.value = v; };
+  por('m-nome', d.nome); por('m-tel', d.telefone); por('m-cat', d.categoria); por('m-cid', d.cidade);
+  por('m-nota', d.nota); por('m-av', d.avaliacoes); $('#m-site').value = d.site || ''; $('#m-ig').value = d.instagram || ''; $('#m-email').value = d.email || '';
+  const achou = [d.telefone && 'telefone', d.nota && 'nota', d.avaliacoes !== '' && 'avaliações', d.categoria && 'categoria', d.cidade && 'cidade'].filter(Boolean);
+  let msg = achou.length ? `Encontrei: ${achou.join(', ')}. Confira os campos e clique em Adicionar.` : 'Não encontrei os dados nesse texto. Confira se copiou a página da empresa (não a lista de resultados).';
+  if (d.site) msg += S.cfg.soSemSite ? ` Atenção: esta empresa tem site (${d.site}) e será ignorada, porque você escolheu só empresas sem site.` : ` Site: ${d.site}.`;
+  else if (achou.length) msg += ' Sem site no perfil.';
+  if (achou.length && !d.telefone) msg += ' O perfil não mostra telefone: digite se souber.';
+  avisoMaps(msg, !achou.length || (d.site && S.cfg.soSemSite));
+}
+const esperar = ms => new Promise(r => setTimeout(r, ms));
+const textoResultado = r => { if (!r) return ''; if (typeof r.payload === 'string') return r.payload; const t = (r.content || []).filter(b => b.type === 'text').map(b => b.text).join('\n'); return t || (r.payload ? JSON.stringify(r.payload) : ''); };
+function idDaAba(r) {
+  const p = r && r.payload; if (p && typeof p === 'object' && (p.tabId ?? p.tab_id) != null) return p.tabId ?? p.tab_id;
+  const m = textoResultado(r).match(/tab\s*_?id\W{0,4}(\d+)/i); return m ? Number(m[1]) : null;
+}
+async function buscarNoMaps() {
+  const r = lerLinkMaps($('#m-link').value);
+  if (!r.valido) return avisoMaps('Cole primeiro o link do Google Maps da empresa.', true);
+  if (!S.mcp) return avisoMaps('A busca automática não está disponível aqui. Use a opção de colar o texto da página, logo abaixo.', true);
+  const b = $('#b-buscar'); b.disabled = true; b.textContent = 'Buscando...'; avisoMaps('Abrindo a página da empresa no navegador do app...');
+  const B = 'host:claude_browser';
+  try {
+    let aba = S.abaMaps ?? null;
+    if (aba != null) { try { await S.mcp.callTool(B, 'navigate', { url: r.url, tabId: aba }); } catch (e) { if (e && ['server_not_connected', 'not_in_manifest', 'cancelled', 'approval_required'].includes(e.code)) throw e; aba = null; } }
+    if (aba == null) { const res = await S.mcp.callTool(B, 'preview_start', { url: r.url }); aba = idDaAba(res); S.abaMaps = aba; }
+    let d = null;
+    for (let t = 0; t < 4; t++) {
+      await esperar(t ? 2500 : 3500);
+      const res = await S.mcp.callTool(B, 'get_page_text', aba != null ? { tabId: aba } : {}, { cache: false });
+      d = extrairDoTexto(textoResultado(res), r.nome);
+      if (d.telefone || d.nota) break;
+    }
+    preencherForm(d || extrairDoTexto('', r.nome));
+  } catch (e) {
+    const c = e && e.code;
+    avisoMaps(c === 'server_not_connected' ? 'A busca automática só funciona com este sistema aberto no app Claude para computador (Mac ou Windows). Aqui, use a opção de colar o texto da página, logo abaixo.'
+      : ['not_in_manifest', 'approval_required', 'cancelled', 'blocked_by_policy'].includes(c) ? 'O acesso ao navegador do app não foi autorizado. Clique em Buscar de novo e permita, ou cole o texto da página abaixo.'
+      : c === 'tool_error' ? 'O navegador do app não conseguiu abrir esse link. Confira o link ou cole o texto da página abaixo.'
+      : 'Não consegui buscar agora. Tente de novo em instantes ou cole o texto da página abaixo.', true);
+  } finally { b.disabled = false; b.textContent = 'Buscar informações da empresa'; }
 }
 
 /* ===================== eventos ===================== */
@@ -636,6 +726,7 @@ document.addEventListener('click', e => {
   else if (act === 'exportar') exportar();
   else if (act === 'exemplos') carregarExemplos();
   else if (act === 'mais') { S.limite += 100; render(); }
+  else if (act === 'buscar-maps') buscarNoMaps();
 });
 let tFiltro, tTexto = {};
 document.addEventListener('input', e => {
@@ -646,6 +737,7 @@ document.addEventListener('input', e => {
     if (av) { av.hidden = !el.value.trim(); av.textContent = !r.valido ? 'Esse link não parece ser do Google Maps.' : r.nome ? `Empresa encontrada no link: ${r.nome}. Agora complete o telefone.` : 'Link guardado. Este tipo de link não traz o nome: digite o nome e o telefone da empresa.'; }
     return;
   }
+  if (act === 'mtexto') { if (el.value.trim().length > 20) preencherForm(extrairDoTexto(el.value, lerLinkMaps($('#m-link').value).nome)); return; }
   if (act === 'fq') { clearTimeout(tFiltro); tFiltro = setTimeout(() => { S.filtro.q = el.value; render(); }, 250); }
   else if (act === 'msg' || act === 'notas') {
     const l = S.leads.get(id); if (!l) return;
@@ -675,7 +767,8 @@ document.addEventListener('submit', e => {
     if (!paraE164(f.telefone)) { toast('Telefone inválido. Use DDD + número.'); return; }
     const lk = lerLinkMaps(f.link);
     if (String(f.link || '').trim() && !lk.valido) { toast('Esse link não parece ser do Google Maps.'); return; }
-    prepararImportacao([{ nome: f.nome, telefone: f.telefone, categoria: f.categoria, cidade: f.cidade, nota: f.nota, avaliacoes: f.avaliacoes, maps: lk.url }], 'Manual');
+    prepararImportacao([{ nome: f.nome, telefone: f.telefone, categoria: f.categoria, cidade: f.cidade, nota: f.nota, avaliacoes: f.avaliacoes, maps: lk.url, website: f.site, instagram: f.instagram, email: f.email }], 'Manual');
+    if (!S.preview.novos.length && S.preview.comSite) { toast('Essa empresa tem site e foi ignorada (Ajustes: só empresas sem site).'); S.preview = null; return; }
     if (S.preview.novos.length) { confirmarImportacao(); e.target.reset(); toast('Empresa adicionada.'); }
     else { toast(S.preview.repetidos ? 'Essa empresa já está na lista.' : 'Não consegui adicionar.'); S.preview = null; render(); }
   }
@@ -698,5 +791,6 @@ rota();
   db.doc('config/perfil').onSnapshot(d => { if (d.exists) { S.cfg = { ...PADRAO, ...structuredClone(d.data()) }; if (S.view !== 'ajustes') render(); } }, () => {});
   claude.use('sample').then(s => { S.sample = s; render(); });
   claude.use('downloads').then(d => { S.downloads = d; });
+  claude.use('mcp').then(m => { S.mcp = m; });
 })();
 </script>
